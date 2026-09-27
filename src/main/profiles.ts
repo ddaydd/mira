@@ -95,6 +95,7 @@ import { observeActivations, setActivationSuppressed } from './mac-activation'
 import { formatActivationEntry } from './activation-trace'
 import { formatVersion, type Outcome, type UpdateChecker } from './update-check'
 import { createUpdateChecker, presentInDialog, startUpdateSchedule } from './update-service'
+import { answersInDialog } from './update-dialog'
 import { shouldSuppressActivation, type NavKind } from './activation-policy'
 import { mayForeground, type CommandOrigin } from './foreground-policy'
 import { isLiveContents } from './live-contents'
@@ -641,6 +642,11 @@ export class ProfileManager {
    * A profile in this map has its plaintext data live on disk; absent = locked.
    * The password is cleared on lock. */
   private readonly unlockedVaults = new Map<string, string>()
+  /** The vault lock under way per profile. A vault stays in unlockedVaults until
+   * its lock ends, so a second lock (the quit's lockAllVaults while the
+   * window-close auto-lock is still copying, a socket lock-profile) would copy an
+   * already-wiped live dir into the vault and empty it: it joins this one. */
+  private readonly vaultLocksInFlight = new Map<string, Promise<void>>()
   /** Encrypted profiles unlocked THIS session, id → their per-unlock partition
    * STRING (`persist:mira-<id>-<nonce>`). A fresh nonce each unlock gives Electron a
    * never-seen session that reads the just-restored cookies, dodging its
@@ -802,7 +808,7 @@ export class ProfileManager {
     const seen: Outcome[] = []
     await this.checker().checkNow(
       (outcome) => seen.push(outcome),
-      origin === 'ui' ? (outcome) => presentInDialog(outcome, parent) : undefined
+      answersInDialog(origin) ? (outcome) => presentInDialog(outcome, parent) : undefined
     )
     const outcome = seen[0]
     if (!outcome) return { state: 'up-to-date' }
@@ -891,6 +897,8 @@ export class ProfileManager {
     const profile = findById(this.profiles, id)
     if (!profile) throw new Error(`unknown profile: ${id}`)
     if (!profile.encrypted) throw new Error(`not encrypted: ${id}`)
+    // A lock still running would wipe what this unlock restores: let it end first.
+    await this.vaultLocksInFlight.get(id)?.catch(() => {})
     if (this.unlockedVaults.has(id)) return { id }
     // Restore into a FRESH partition dir (canonical + random nonce) so Electron
     // builds a brand-new session that reads these cookies, instead of serving a
@@ -926,7 +934,17 @@ export class ProfileManager {
    * closes the windows itself). Assumes the profile's window is already gone
    * (handles released) and that it is unlocked with `password`. Flushes the live
    * session to disk, copies it into the vault, wipes the plaintext, clears state. */
-  private async performVaultLock(id: string, password: string): Promise<void> {
+  private performVaultLock(id: string, password: string): Promise<void> {
+    const running = this.vaultLocksInFlight.get(id)
+    if (running) return running
+    const lock = this.runVaultLock(id, password).finally(() => {
+      this.vaultLocksInFlight.delete(id)
+    })
+    this.vaultLocksInFlight.set(id, lock)
+    return lock
+  }
+
+  private async runVaultLock(id: string, password: string): Promise<void> {
     // Land every last change on disk BEFORE the copy: ProfileData's debounced
     // history/permissions writes, and the Electron session's cookies + DOM storage.
     // Without this the vault captures a stale snapshot (recent cookies are buffered
@@ -956,6 +974,11 @@ export class ProfileManager {
     return this.unlockedVaults.size > 0
   }
 
+  /** The ids of the unlocked encrypted profiles (index.ts, quit). */
+  unlockedVaultIds(): string[] {
+    return [...this.unlockedVaults.keys()]
+  }
+
   /** Lock EVERY currently-unlocked vault: close each one's window (so its file
    * handles are released), then copy its live data back into the vault and wipe the
    * plaintext. Called on app quit so a session left unlocked is preserved instead of
@@ -970,8 +993,8 @@ export class ProfileManager {
       for (const id of [...this.unlockedVaults.keys()]) {
         const password = this.unlockedVaults.get(id)
         if (password === undefined) continue
-        onProfile?.({ id, label: findById(this.profiles, id)?.label })
         try {
+          onProfile?.({ id, label: findById(this.profiles, id)?.label })
           await this.closeWindowAndWait(id)
           await this.performVaultLock(id, password)
           locked.push(id)

@@ -103,6 +103,12 @@ export interface UpdateCheckDeps {
 
 const EMPTY_STATE: UpdateState = { lastCheck: 0, notifiedVersion: null }
 
+/** What the latest-release request answered, shared by every caller that joined
+ * it: each one derives its own outcome from it (a manual check answers "up to
+ * date" where the daily one stays silent). */
+type Fetched =
+  { ok: true; latest: Version; notified: boolean } | { ok: false; error: string; notified: boolean }
+
 /** Drives the schedule: `poll()` on a timer runs the check when it is due,
  * `checkNow()` runs one on demand and always answers. One request at a time. */
 export class UpdateChecker {
@@ -110,7 +116,9 @@ export class UpdateChecker {
   /** Unix seconds before which no automatic request is sent. In memory only, so
    * a failed request retries within the hour without being written to disk. */
   private nextAttempt: number | null = null
-  private inFlight: Promise<void> | null = null
+  /** The request in flight. Only the fetch is shared: how the answer is shown
+   * belongs to each caller, so a dialog left open never holds another caller up. */
+  private inFlight: Promise<Fetched> | null = null
 
   constructor(private readonly deps: UpdateCheckDeps) {}
 
@@ -121,10 +129,12 @@ export class UpdateChecker {
    * `check-for-updates` command) can answer its client with it instead of
    * re-deriving one. `present`, when given, shows the outcome INSTEAD of
    * deps.notify: a check the user clicked answers in a dialog, not a desktop
-   * notification (update-dialog.ts). */
+   * notification (update-dialog.ts). It resolves to whether the user was told
+   * about the version for good: false (they picked "Later", or the download it
+   * started failed) leaves it to the daily check. */
   async checkNow(
     observe?: (outcome: Outcome) => void,
-    present?: (outcome: Outcome) => void | Promise<void>
+    present?: (outcome: Outcome) => Promise<boolean>
   ): Promise<void> {
     return this.run(true, observe, present)
   }
@@ -143,47 +153,61 @@ export class UpdateChecker {
   private async run(
     manual: boolean,
     observe?: (outcome: Outcome) => void,
-    present?: (outcome: Outcome) => void | Promise<void>
+    present?: (outcome: Outcome) => Promise<boolean>
   ): Promise<void> {
-    if (this.inFlight) return this.inFlight
-    this.inFlight = this.perform(manual, observe, present).finally(() => {
-      this.inFlight = null
-    })
+    const fetched = await this.fetchOnce()
+    let outcome: Outcome | null
+    if (fetched.ok) {
+      const current = parseVersion(this.deps.currentVersion) ?? [0, 0, 0]
+      outcome = outcomeFor(fetched.latest, current, this.loaded().notifiedVersion, manual)
+    } else {
+      outcome = manual ? { kind: 'failed', error: fetched.error } : null
+    }
+    if (!outcome) return
+    observe?.(outcome)
+    if (present) {
+      const told = await present(outcome)
+      if (told && outcome.kind === 'newer') this.markNotified(outcome.version)
+      return
+    }
+    // Callers that joined one request share one notification.
+    if (fetched.notified) return
+    fetched.notified = true
+    // Record the announcement BEFORE showing it: a crash meanwhile must not
+    // re-announce the version.
+    if (outcome.kind === 'newer') this.markNotified(outcome.version)
+    await this.deps.notify(outcome)
+  }
+
+  private fetchOnce(): Promise<Fetched> {
+    if (!this.inFlight) {
+      this.inFlight = this.fetch().finally(() => {
+        this.inFlight = null
+      })
+    }
     return this.inFlight
   }
 
-  private async perform(
-    manual: boolean,
-    observe?: (outcome: Outcome) => void,
-    present?: (outcome: Outcome) => void | Promise<void>
-  ): Promise<void> {
+  private async fetch(): Promise<Fetched> {
     const now = this.deps.now()
-    let outcome: Outcome | null
     try {
       const tag = await this.deps.fetchLatestTag()
       const latest = parseVersion(tag)
       if (!latest) throw new Error(`unparsable tag ${JSON.stringify(tag)}`)
-      const current = parseVersion(this.deps.currentVersion) ?? [0, 0, 0]
-      const state = this.loaded()
-      outcome = outcomeFor(latest, current, state.notifiedVersion, manual)
-      this.write({ ...state, lastCheck: now })
+      this.write({ ...this.loaded(), lastCheck: now })
       this.nextAttempt = now + CHECK_INTERVAL_SECS
       this.note(`update check: latest release is ${formatVersion(latest)}`)
+      return { ok: true, latest, notified: false }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       this.note(`update check failed, retrying in an hour: ${message}`)
       this.nextAttempt = now + RETRY_SECS
-      outcome = manual ? { kind: 'failed', error: message } : null
+      return { ok: false, error: message, notified: false }
     }
-    if (!outcome) return
-    observe?.(outcome)
-    // Record the announcement BEFORE showing it: the dialog is awaited until the
-    // user dismisses it, and a crash meanwhile must not re-announce the version.
-    if (outcome.kind === 'newer') {
-      const version = formatVersion(outcome.version)
-      this.write({ ...this.loaded(), notifiedVersion: version })
-    }
-    await (present ?? this.deps.notify)(outcome)
+  }
+
+  private markNotified(version: Version): void {
+    this.write({ ...this.loaded(), notifiedVersion: formatVersion(version) })
   }
 
   private loaded(): UpdateState {

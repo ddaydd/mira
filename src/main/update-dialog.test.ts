@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { updateDialogFor } from './update-dialog'
+import { answersInDialog, updateDialogFor } from './update-dialog'
 
 describe('updateDialogFor', () => {
   it('offers to install a newer release on a published build', () => {
@@ -41,5 +41,12 @@ describe('updateDialogFor', () => {
       const d = updateDialogFor({ kind: 'newer', version: [2, 0, 0] }, '1.0.0', dist)
       expect(d.actions).toHaveLength(d.buttons.length)
     }
+  })
+})
+
+describe('answersInDialog', () => {
+  it('answers in a dialog only for a click inside Mira, never for a socket caller', () => {
+    expect(answersInDialog('ui')).toBe(true)
+    expect(answersInDialog('external')).toBe(false)
   })
 })

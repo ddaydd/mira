@@ -12,6 +12,14 @@
 
 import { formatVersion, releasePage, type Outcome } from './update-check'
 import type { Distribution } from './self-update'
+import type { CommandOrigin } from './foreground-policy'
+
+/** Whether a check's answer comes back in a dialog. Only for a click inside Mira
+ * (origin 'ui'): a socket/MCP caller must never raise a modal in front of the user
+ * (foreground-policy.ts), and nobody is there to dismiss it. */
+export function answersInDialog(origin: CommandOrigin): boolean {
+  return origin === 'ui'
+}
 
 /** What a dialog button does once clicked. */
 export type UpdateDialogAction =

@@ -38,6 +38,9 @@ export interface QuitGate {
   /** Mark the quit that is about to be requested as already decided, so the next
    * allowQuit() lets it through without asking. */
   suppress: () => void
+  /** True when the quit under way is one a person confirmed in the dialog, false
+   * for a scripted one (suppress()): only the former may put a window up. */
+  confirmedByUser: () => boolean
 }
 
 export function createQuitGate(opts: { prompt: QuitPrompt; quit: () => void }): QuitGate {
@@ -48,6 +51,7 @@ export function createQuitGate(opts: { prompt: QuitPrompt; quit: () => void }): 
   // Guards against a second Cmd+Q while the dialog is already up, which would
   // stack a second identical modal.
   let prompting = false
+  let byUser = false
   return {
     allowQuit: () => {
       if (confirmed) return true
@@ -58,6 +62,7 @@ export function createQuitGate(opts: { prompt: QuitPrompt; quit: () => void }): 
             prompting = false
             if (!ok) return
             confirmed = true
+            byUser = true
             opts.quit()
           },
           () => {
@@ -69,7 +74,9 @@ export function createQuitGate(opts: { prompt: QuitPrompt; quit: () => void }): 
     },
     suppress: () => {
       confirmed = true
-    }
+      byUser = false
+    },
+    confirmedByUser: () => byUser
   }
 }
 
@@ -93,6 +100,28 @@ export function allowQuitNow(): boolean {
  * last window closed, OS signal). */
 export function suppressQuitPrompt(): void {
   installed?.suppress()
+}
+
+/** Whether the quit under way was confirmed by a person (QuitGate). */
+export function quitConfirmedByUser(): boolean {
+  return installed?.confirmedByUser() ?? false
+}
+
+/** What 'before-quit' does about the encrypted profiles still unlocked (index.ts).
+ * - 'wait': their quit-time lock is still running. The quit is held back: letting
+ *   a second Cmd+Q (or a socket quit, SIGTERM) through would exit mid-copy, and
+ *   the next launch would discard the unsaved session.
+ * - 'lock': some vault needs locking first, so defer the quit and lock.
+ * - 'proceed': nothing left to lock. A vault whose lock already failed during
+ *   this run counts as done, or the quit would retry it forever; a vault
+ *   unlocked again after a quit was cancelled does not, and is locked again. */
+export function quitVaultStep(opts: {
+  lockRunning: boolean
+  unlocked: readonly string[]
+  failed: ReadonlySet<string>
+}): 'wait' | 'lock' | 'proceed' {
+  if (opts.lockRunning) return 'wait'
+  return opts.unlocked.some((id) => !opts.failed.has(id)) ? 'lock' : 'proceed'
 }
 
 /** Tests only: drop the installed gate so cases do not leak into each other. */

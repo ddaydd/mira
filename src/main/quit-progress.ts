@@ -20,6 +20,14 @@ export class QuitTimeline {
     private readonly log: (line: string) => void
   ) {}
 
+  /** Start the clock at a new quit attempt (its +0ms line). A quit can be
+   * cancelled (a page's beforeunload) and asked again much later: each attempt
+   * is timed from its own start. */
+  begin(step: string): void {
+    this.start = null
+    this.mark(step)
+  }
+
   /** Record a step. The first call starts the clock (it is the +0ms line). */
   mark(step: string): void {
     const t = this.now()

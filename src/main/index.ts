@@ -41,6 +41,8 @@ import {
   installQuitGate,
   allowQuitNow,
   suppressQuitPrompt,
+  quitConfirmedByUser,
+  quitVaultStep,
   QUIT_CONFIRM
 } from './quit'
 import { installTouchIdWebAuthn } from './webauthn'
@@ -79,7 +81,14 @@ installQuitGate(
     prompt: async () => {
       // Sheet-attached to the window the user is looking at when there is one;
       // app-modal otherwise (quit with every window closed, on macOS).
-      const parent = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0] ?? null
+      // A sheet (the update dialog) holds key status, so getFocusedWindow() is
+      // null then: fall back to a VISIBLE top-level window, never a hidden
+      // tooltip/toast child, where the prompt would never be seen and the gate
+      // would stay stuck "prompting".
+      const parent =
+        BrowserWindow.getFocusedWindow() ??
+        BrowserWindow.getAllWindows().find((w) => w.isVisible() && !w.getParentWindow()) ??
+        null
       const options = {
         type: 'question' as const,
         buttons: [QUIT_CONFIRM.quitLabel, QUIT_CONFIRM.cancelLabel],
@@ -704,8 +713,12 @@ app.whenReady().then(async () => {
   // otherwise its live plaintext is left on disk and reconcile wipes it at next
   // startup, discarding every cookie/login since the last window-close. We
   // preventDefault, lock all vaults (a few seconds of hdiutil), then quit for real
-  // (the second pass skips this block — nothing is unlocked anymore).
-  let quitVaultLockStarted = false
+  // (the second pass finds nothing left to lock). The decision is quitVaultStep.
+  let quitLockRunning = false
+  // Vaults whose quit-time lock failed this run: not retried, or the quit loops.
+  const quitLockFailed = new Set<string>()
+  // Only labels the log line of the pass that follows the lock.
+  let resumingAfterLock = false
   // One `[mira-quit] +<ms>ms` log line per step, so a slow quit names its slow
   // step (quit-progress.ts).
   const quitTimeline = new QuitTimeline(
@@ -721,29 +734,59 @@ app.whenReady().then(async () => {
       event.preventDefault()
       return
     }
-    quitTimeline.mark(quitVaultLockStarted ? 'vaults done, quitting' : 'quit confirmed')
+    const step = quitVaultStep({
+      lockRunning: quitLockRunning,
+      unlocked: profiles.unlockedVaultIds(),
+      failed: quitLockFailed
+    })
+    if (step === 'wait') {
+      // Quit asked again mid-lock: the lock's own app.quit() ends the quit.
+      event.preventDefault()
+      quitTimeline.mark('quit asked again, still locking')
+      return
+    }
+    if (resumingAfterLock) quitTimeline.mark('vaults done, quitting')
+    else quitTimeline.begin('quit confirmed')
     profiles.beginQuit()
-    if (quitVaultLockStarted || !profiles.hasUnlockedVaults()) return
-    quitVaultLockStarted = true
+    if (step === 'proceed') return
+    quitLockRunning = true
     event.preventDefault()
-    // The deferred part takes seconds (hdiutil per profile): say so on screen.
-    const progress = showQuitProgress()
+    // The deferred part takes seconds (hdiutil per profile): say so on screen,
+    // but only to a person who asked to quit. A scripted quit (socket, build.sh,
+    // a signal) must not put a window over the app the user is working in.
+    const progress = quitConfirmedByUser() ? showQuitProgress() : null
+    const attempted: string[] = []
     profiles
       .lockAllVaults((profile) => {
+        attempted.push(profile.id)
         quitTimeline.mark(`locking vault ${profile.id}`)
-        progress.setStep(lockingStepLabel(profile.label))
+        progress?.setStep(lockingStepLabel(profile.label))
       })
-      .catch((error) => console.error('[mira] lock-on-quit failed', error))
+      .then(({ locked }) => {
+        const failed = attempted.filter((id) => !locked.includes(id))
+        for (const id of failed) quitLockFailed.add(id)
+        quitTimeline.mark(
+          failed.length ? `vaults locked, failed: ${failed.join(', ')}` : 'vaults locked'
+        )
+      })
+      .catch((error) => {
+        for (const id of attempted) quitLockFailed.add(id)
+        console.error('[mira] lock-on-quit failed', error)
+      })
       .finally(() => {
-        quitTimeline.mark('vaults locked')
-        progress.setStep('Closing windows')
-        // Destroyed with the rest when Electron closes every window; the close
-        // below only matters if the quit is cancelled.
-        app.once('will-quit', () => progress.close())
-        // A page's beforeunload can still cancel the quit: never leave the
-        // spinner up over a Mira that stayed open.
-        setTimeout(() => progress.close(), 20_000).unref()
-        app.quit()
+        quitLockRunning = false
+        if (progress) {
+          progress.setStep('Closing windows')
+          // A page's beforeunload can still cancel the quit: never leave the
+          // spinner up over a Mira that stayed open.
+          setTimeout(() => progress.close(), 20_000).unref()
+        }
+        resumingAfterLock = true
+        try {
+          app.quit()
+        } finally {
+          resumingAfterLock = false
+        }
       })
   })
 

@@ -27,6 +27,21 @@ describe('QuitTimeline', () => {
     ])
   })
 
+  it('times a new quit attempt from its own start', () => {
+    let t = 0
+    const lines: string[] = []
+    const timeline = new QuitTimeline(
+      () => t,
+      (line) => lines.push(line)
+    )
+    timeline.begin('quit confirmed')
+    t += 500
+    timeline.mark('vaults locked')
+    t += 7_200_000
+    timeline.begin('quit confirmed')
+    expect(lines[2]).toBe('[mira-quit] +0ms quit confirmed')
+  })
+
   it('never prints a negative or fractional duration', () => {
     expect(formatQuitStep(-3, 'x')).toBe('[mira-quit] +0ms x')
     expect(formatQuitStep(12.6, 'x')).toBe('[mira-quit] +13ms x')

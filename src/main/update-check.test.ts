@@ -82,7 +82,9 @@ function harness(opts: {
   let now = opts.now ?? 1_000_000
   let state: UpdateState = { lastCheck: 0, notifiedVersion: null, ...opts.state }
   const shown: Outcome[] = []
+  let gate: Promise<void> | null = null
   const fetchLatestTag = vi.fn(async () => {
+    if (gate) await gate
     if (opts.tag instanceof Error) throw opts.tag
     return opts.tag ?? 'v1.1.0'
   })
@@ -108,6 +110,12 @@ function harness(opts: {
     },
     advance: (secs: number) => {
       now += secs
+    },
+    /** Hold the next requests until the returned function is called. */
+    holdFetch: (): (() => void) => {
+      let open: () => void = () => {}
+      gate = new Promise<void>((resolve) => (open = resolve))
+      return () => open()
     }
   }
 }
@@ -116,12 +124,58 @@ describe('UpdateChecker', () => {
   it('shows a manual check through `present` instead of the notification when given', async () => {
     const h = harness({ current: '1.0.0', tag: 'v1.1.0' })
     const presented: unknown[] = []
-    await h.checker.checkNow(undefined, (outcome) => {
+    await h.checker.checkNow(undefined, async (outcome) => {
       presented.push(outcome)
+      return true
     })
     expect(presented).toEqual([{ kind: 'newer', version: [1, 1, 0] }])
     expect(h.shown).toEqual([])
     expect(h.state.notifiedVersion).toBe('1.1.0')
+  })
+
+  it('leaves a version the user put off to the daily check', async () => {
+    // "Later" on a release build: nothing was downloaded, so the version must not
+    // count as announced, or the daily check would never install it.
+    const h = harness({ current: '1.0.0', tag: 'v1.1.0' })
+    await h.checker.checkNow(undefined, async () => false)
+    expect(h.state.notifiedVersion).toBeNull()
+
+    h.advance(CHECK_INTERVAL_SECS + 1)
+    await h.checker.poll()
+    expect(h.shown).toEqual([{ kind: 'newer', version: [1, 1, 0] }])
+  })
+
+  it('still presents a manual check that joins the daily request in flight', async () => {
+    const h = harness({ current: '1.1.0', tag: 'v1.1.0' })
+    const release = h.holdFetch()
+    h.advance(CHECK_INTERVAL_SECS)
+    const poll = h.checker.poll()
+    const presented: Outcome[] = []
+    const manual = h.checker.checkNow(undefined, async (outcome) => {
+      presented.push(outcome)
+      return true
+    })
+    release()
+    await Promise.all([poll, manual])
+    expect(h.fetchLatestTag).toHaveBeenCalledOnce()
+    expect(presented).toEqual([{ kind: 'up-to-date' }])
+  })
+
+  it('never holds a joined caller until an open dialog is dismissed', async () => {
+    const h = harness({ current: '1.0.0', tag: 'v1.1.0' })
+    let dismiss: (told: boolean) => void = () => {}
+    const release = h.holdFetch()
+    const menu = h.checker.checkNow(
+      undefined,
+      () => new Promise<boolean>((resolve) => (dismiss = resolve))
+    )
+    const seen: Outcome[] = []
+    const socket = h.checker.checkNow((outcome) => seen.push(outcome))
+    release()
+    await socket
+    expect(seen).toEqual([{ kind: 'newer', version: [1, 1, 0] }])
+    dismiss(true)
+    await menu
   })
 
   it('announces a newer release and remembers it, so the next daily check is silent', async () => {
@@ -181,9 +235,15 @@ describe('UpdateChecker', () => {
     expect(h.shown).toEqual([{ kind: 'failed', error: 'unparsable tag "nightly"' }])
   })
 
-  it('runs one request at a time', async () => {
+  it('runs one request at a time, and answers every caller with one notification', async () => {
     const h = harness({})
-    await Promise.all([h.checker.checkNow(), h.checker.checkNow()])
+    const seen: Outcome[] = []
+    const observe = (outcome: Outcome): void => {
+      seen.push(outcome)
+    }
+    await Promise.all([h.checker.checkNow(observe), h.checker.checkNow(observe)])
     expect(h.fetchLatestTag).toHaveBeenCalledOnce()
+    expect(seen).toHaveLength(2)
+    expect(h.shown).toHaveLength(1)
   })
 })

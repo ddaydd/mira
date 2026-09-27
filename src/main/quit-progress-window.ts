@@ -1,7 +1,9 @@
 // The native half of quit-progress.ts: a small window that says Mira is quitting
 // and which step it is on. Shown by index.ts when the quit is deferred to re-lock
-// encrypted profiles. The user asked to quit, so it may come to the front: it
-// takes no focus and nothing else is left for it to cover. Not unit-tested.
+// encrypted profiles, and only for a quit a person confirmed (index.ts): a
+// scripted quit shows nothing. It takes no focus and is not always-on-top, so it
+// never floats over another app the user switched to. It opens on the screen of
+// the window the user quit from. Not unit-tested.
 
 import { BrowserWindow, screen } from 'electron'
 import { QUIT_PROGRESS_SIZE, QUIT_PROGRESS_URL, setStepScript } from './quit-progress'
@@ -12,7 +14,12 @@ export interface QuitProgress {
 }
 
 export function showQuitProgress(): QuitProgress {
-  const { workArea } = screen.getPrimaryDisplay()
+  const from =
+    BrowserWindow.getFocusedWindow() ??
+    BrowserWindow.getAllWindows().find((w) => w.isVisible() && !w.getParentWindow())
+  const { workArea } = from
+    ? screen.getDisplayMatching(from.getBounds())
+    : screen.getPrimaryDisplay()
   const win = new BrowserWindow({
     ...QUIT_PROGRESS_SIZE,
     x: Math.round(workArea.x + (workArea.width - QUIT_PROGRESS_SIZE.width) / 2),
@@ -24,7 +31,6 @@ export function showQuitProgress(): QuitProgress {
     maximizable: false,
     fullscreenable: false,
     focusable: false,
-    alwaysOnTop: true,
     skipTaskbar: true,
     backgroundColor: '#1b1b1f',
     webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false }

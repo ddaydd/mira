@@ -5,6 +5,7 @@ import {
   allowQuitNow,
   suppressQuitPrompt,
   resetQuitGate,
+  quitVaultStep,
   QUIT_CONFIRM
 } from './quit'
 
@@ -150,5 +151,42 @@ describe('QUIT_CONFIRM', () => {
   it('names the two buttons the dialog offers', () => {
     expect(QUIT_CONFIRM.quitLabel).toBe('Quit')
     expect(QUIT_CONFIRM.cancelLabel).toBe('Cancel')
+  })
+})
+
+describe('confirmedByUser', () => {
+  it('is true only for a quit a person confirmed, never for a scripted one', async () => {
+    const p = deferredPrompt()
+    const gate = createQuitGate({ prompt: p.prompt, quit: () => {} })
+    expect(gate.confirmedByUser()).toBe(false)
+    gate.allowQuit()
+    await p.answer(true)
+    expect(gate.confirmedByUser()).toBe(true)
+
+    const scripted = createQuitGate({ prompt: p.prompt, quit: () => {} })
+    scripted.suppress()
+    expect(scripted.confirmedByUser()).toBe(false)
+  })
+})
+
+describe('quitVaultStep', () => {
+  const none = new Set<string>()
+
+  it('holds any quit back while the quit-time lock is running', () => {
+    // A second Cmd+Q mid-lock must not exit before the vault copy is done.
+    expect(quitVaultStep({ lockRunning: true, unlocked: ['a'], failed: none })).toBe('wait')
+    expect(quitVaultStep({ lockRunning: true, unlocked: [], failed: none })).toBe('wait')
+  })
+
+  it('locks what is unlocked, and proceeds when nothing is', () => {
+    expect(quitVaultStep({ lockRunning: false, unlocked: ['a'], failed: none })).toBe('lock')
+    expect(quitVaultStep({ lockRunning: false, unlocked: [], failed: none })).toBe('proceed')
+  })
+
+  it('does not retry a vault whose lock failed, or the quit would loop', () => {
+    const failed = new Set(['a'])
+    expect(quitVaultStep({ lockRunning: false, unlocked: ['a'], failed })).toBe('proceed')
+    // A vault unlocked again after a cancelled quit is still locked.
+    expect(quitVaultStep({ lockRunning: false, unlocked: ['a', 'b'], failed })).toBe('lock')
   })
 })

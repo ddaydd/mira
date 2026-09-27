@@ -96,8 +96,8 @@ export function noticeFor(
  * says it is ready. The swap happens when Mira quits; clicking restarts now.
  * A failure falls back to the release page. The daily check announces a version
  * once, so after a failed download "Check for Updates" is what retries it. */
-function stageAndAnnounce(): void {
-  prepareLatestUpdate(LATEST_RELEASE_URL)
+function stageAndAnnounce(): Promise<boolean> {
+  return prepareLatestUpdate(LATEST_RELEASE_URL)
     .then((version) => {
       notifyWith(
         {
@@ -106,6 +106,7 @@ function stageAndAnnounce(): void {
         },
         restartToUpdate
       )
+      return true
     })
     .catch((error: unknown) => {
       const message = error instanceof Error ? error.message : String(error)
@@ -118,6 +119,7 @@ function stageAndAnnounce(): void {
             .catch((e) => console.error('[mira] open releases', e))
         }
       )
+      return false
     })
 }
 
@@ -133,7 +135,7 @@ function notifyWith(notice: { title: string; body: string }, onClick: () => void
 
 function show(outcome: Outcome): void {
   if (outcome.kind === 'newer' && distribution() === 'release') {
-    stageAndAnnounce()
+    void stageAndAnnounce()
     return
   }
   const notice = noticeFor(outcome, app.getVersion())
@@ -152,32 +154,45 @@ function show(outcome: Outcome): void {
 }
 
 /** Show a MANUAL check's outcome in a dialog (update-dialog.ts), as a sheet on
- * `parent` when there is one, then run the button's action. Resolves once the
- * dialog is dismissed. */
+ * `parent`, then run the button's action. Resolves once that is done, to whether
+ * the user is now told about the version for good (UpdateChecker.checkNow):
+ * "Later" or a failed download leaves it to the daily check.
+ *
+ * Without a window that can hold a sheet (none left, closed during the request,
+ * minimized, hidden), the outcome goes out as the usual notification instead: a
+ * sheet on an invisible window cannot be seen, and a parentless message box is
+ * app-modal and holds the whole main process (socket included) until clicked. */
 export async function presentInDialog(
   outcome: Outcome,
   parent: BrowserWindow | null
-): Promise<void> {
+): Promise<boolean> {
+  if (!canHoldSheet(parent)) {
+    show(outcome)
+    return true
+  }
   const spec = updateDialogFor(outcome, app.getVersion(), distribution())
-  const options = {
+  const { response } = await dialog.showMessageBox(parent, {
     type: spec.type,
     message: spec.message,
     detail: spec.detail,
     buttons: spec.buttons,
     defaultId: 0,
     cancelId: spec.cancelId
-  }
-  const { response } =
-    parent && !parent.isDestroyed()
-      ? await dialog.showMessageBox(parent, options)
-      : await dialog.showMessageBox(options)
+  })
   const action = spec.actions[response] ?? { kind: 'none' }
-  if (action.kind === 'install') stageAndAnnounce()
-  else if (action.kind === 'open') {
+  if (action.kind === 'install') return stageAndAnnounce()
+  if (action.kind === 'open') {
     shell
       .openExternal(action.url)
       .catch((error) => console.error('[mira] open release page', error))
   }
+  // A local build is told for good by the dialog itself; a release build only
+  // once its download has succeeded (the install button above).
+  return distribution() !== 'release'
+}
+
+function canHoldSheet(window: BrowserWindow | null): window is BrowserWindow {
+  return window !== null && !window.isDestroyed() && window.isVisible() && !window.isMinimized()
 }
 
 /** Build the checker Mira actually runs. */
