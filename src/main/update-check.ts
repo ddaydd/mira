@@ -119,9 +119,14 @@ export class UpdateChecker {
    *
    * `observe` receives the same outcome the user is shown, so a caller (the
    * `check-for-updates` command) can answer its client with it instead of
-   * re-deriving one. */
-  async checkNow(observe?: (outcome: Outcome) => void): Promise<void> {
-    return this.run(true, observe)
+   * re-deriving one. `present`, when given, shows the outcome INSTEAD of
+   * deps.notify: a check the user clicked answers in a dialog, not a desktop
+   * notification (update-dialog.ts). */
+  async checkNow(
+    observe?: (outcome: Outcome) => void,
+    present?: (outcome: Outcome) => void | Promise<void>
+  ): Promise<void> {
+    return this.run(true, observe, present)
   }
 
   /** Called from a timer: start the daily check when it is due, and do nothing
@@ -135,15 +140,23 @@ export class UpdateChecker {
     return this.run(false)
   }
 
-  private async run(manual: boolean, observe?: (outcome: Outcome) => void): Promise<void> {
+  private async run(
+    manual: boolean,
+    observe?: (outcome: Outcome) => void,
+    present?: (outcome: Outcome) => void | Promise<void>
+  ): Promise<void> {
     if (this.inFlight) return this.inFlight
-    this.inFlight = this.perform(manual, observe).finally(() => {
+    this.inFlight = this.perform(manual, observe, present).finally(() => {
       this.inFlight = null
     })
     return this.inFlight
   }
 
-  private async perform(manual: boolean, observe?: (outcome: Outcome) => void): Promise<void> {
+  private async perform(
+    manual: boolean,
+    observe?: (outcome: Outcome) => void,
+    present?: (outcome: Outcome) => void | Promise<void>
+  ): Promise<void> {
     const now = this.deps.now()
     let outcome: Outcome | null
     try {
@@ -170,7 +183,7 @@ export class UpdateChecker {
       const version = formatVersion(outcome.version)
       this.write({ ...this.loaded(), notifiedVersion: version })
     }
-    await this.deps.notify(outcome)
+    await (present ?? this.deps.notify)(outcome)
   }
 
   private loaded(): UpdateState {

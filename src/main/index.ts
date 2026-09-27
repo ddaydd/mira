@@ -45,6 +45,8 @@ import {
 } from './quit'
 import { installTouchIdWebAuthn } from './webauthn'
 import { applyStagedUpdateOnQuit, maybeShowUnsignedNotice } from './self-update-service'
+import { QuitTimeline, lockingStepLabel } from './quit-progress'
+import { showQuitProgress } from './quit-progress-window'
 import { aboutPanelOptions } from './about'
 
 // External control socket (see CLAUDE.md, "tout pilotable"). Override with the
@@ -538,8 +540,10 @@ app.whenReady().then(async () => {
       // window, like the toolbar / socket / Cmd+, path.
       openSettings: () => runDetached('open-settings', {}, profiles.contextForFocused()),
       // Same check as the daily one, through the registry like every other menu
-      // item. The result reaches the user as a notification (update-service.ts).
-      checkForUpdates: () => runDetached('check-for-updates', {}, profiles.contextForFocused()),
+      // item. Menu context (origin 'ui'): the user clicked and is waiting, so the
+      // result comes back in a dialog on their window, not a notification
+      // (update-dialog.ts).
+      checkForUpdates: () => runDetached('check-for-updates', {}, profiles.contextForMenu()),
       // Cmd+K: toggle the command palette in the focused window, through the same
       // bus as everything else (no `open` arg → flip the current state).
       togglePalette: () => runDetached('toggle-palette', {}, profiles.contextForFocused()),
@@ -702,6 +706,12 @@ app.whenReady().then(async () => {
   // preventDefault, lock all vaults (a few seconds of hdiutil), then quit for real
   // (the second pass skips this block — nothing is unlocked anymore).
   let quitVaultLockStarted = false
+  // One `[mira-quit] +<ms>ms` log line per step, so a slow quit names its slow
+  // step (quit-progress.ts).
+  const quitTimeline = new QuitTimeline(
+    () => Date.now(),
+    (line) => console.log(line)
+  )
   app.on('before-quit', (event) => {
     // Ask before anything else: beginQuit() below flips state the rest of the app
     // reads (windows closing during a quit keep their "was open" flag), and a
@@ -711,19 +721,40 @@ app.whenReady().then(async () => {
       event.preventDefault()
       return
     }
+    quitTimeline.mark(quitVaultLockStarted ? 'vaults done, quitting' : 'quit confirmed')
     profiles.beginQuit()
     if (quitVaultLockStarted || !profiles.hasUnlockedVaults()) return
     quitVaultLockStarted = true
     event.preventDefault()
+    // The deferred part takes seconds (hdiutil per profile): say so on screen.
+    const progress = showQuitProgress()
     profiles
-      .lockAllVaults()
+      .lockAllVaults((profile) => {
+        quitTimeline.mark(`locking vault ${profile.id}`)
+        progress.setStep(lockingStepLabel(profile.label))
+      })
       .catch((error) => console.error('[mira] lock-on-quit failed', error))
-      .finally(() => app.quit())
+      .finally(() => {
+        quitTimeline.mark('vaults locked')
+        progress.setStep('Closing windows')
+        // Destroyed with the rest when Electron closes every window; the close
+        // below only matters if the quit is cancelled.
+        app.once('will-quit', () => progress.close())
+        // A page's beforeunload can still cancel the quit: never leave the
+        // spinner up over a Mira that stayed open.
+        setTimeout(() => progress.close(), 20_000).unref()
+        app.quit()
+      })
   })
 
   // Session writes are debounced in the ProfileManager; flush any pending one on
   // quit so the last changes always land (see flushPendingSaves).
-  app.on('will-quit', () => profiles.flushPendingSaves())
+  app.on('will-quit', () => {
+    quitTimeline.mark('windows closed (will-quit)')
+    profiles.flushPendingSaves()
+    quitTimeline.mark('pending saves flushed')
+  })
+  app.on('quit', () => quitTimeline.mark('quit'))
   // A published build installs a staged update once it has quit (the swap runs
   // in a detached script that waits for this process to exit). No-op otherwise.
   app.on('will-quit', () => applyStagedUpdateOnQuit())

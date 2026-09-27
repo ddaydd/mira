@@ -6,7 +6,7 @@
 // continuously and must never jump in front of whatever the user is doing
 // (foreground-policy.ts). Clicking the notification opens the release page.
 
-import { Notification, app, shell } from 'electron'
+import { BrowserWindow, Notification, app, dialog, shell } from 'electron'
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import {
@@ -18,6 +18,7 @@ import {
   type UpdateState
 } from './update-check'
 import { distribution, prepareLatestUpdate, restartToUpdate } from './self-update-service'
+import { updateDialogFor } from './update-dialog'
 
 /** How often the timer asks the checker whether the daily check is due. The
  * check itself is rate-limited by the checker, so this only decides how soon
@@ -148,6 +149,35 @@ function show(outcome: Outcome): void {
     })
   }
   notification.show()
+}
+
+/** Show a MANUAL check's outcome in a dialog (update-dialog.ts), as a sheet on
+ * `parent` when there is one, then run the button's action. Resolves once the
+ * dialog is dismissed. */
+export async function presentInDialog(
+  outcome: Outcome,
+  parent: BrowserWindow | null
+): Promise<void> {
+  const spec = updateDialogFor(outcome, app.getVersion(), distribution())
+  const options = {
+    type: spec.type,
+    message: spec.message,
+    detail: spec.detail,
+    buttons: spec.buttons,
+    defaultId: 0,
+    cancelId: spec.cancelId
+  }
+  const { response } =
+    parent && !parent.isDestroyed()
+      ? await dialog.showMessageBox(parent, options)
+      : await dialog.showMessageBox(options)
+  const action = spec.actions[response] ?? { kind: 'none' }
+  if (action.kind === 'install') stageAndAnnounce()
+  else if (action.kind === 'open') {
+    shell
+      .openExternal(action.url)
+      .catch((error) => console.error('[mira] open release page', error))
+  }
 }
 
 /** Build the checker Mira actually runs. */

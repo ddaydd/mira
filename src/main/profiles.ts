@@ -94,7 +94,7 @@ import {
 import { observeActivations, setActivationSuppressed } from './mac-activation'
 import { formatActivationEntry } from './activation-trace'
 import { formatVersion, type Outcome, type UpdateChecker } from './update-check'
-import { createUpdateChecker, startUpdateSchedule } from './update-service'
+import { createUpdateChecker, presentInDialog, startUpdateSchedule } from './update-service'
 import { shouldSuppressActivation, type NavKind } from './activation-policy'
 import { mayForeground, type CommandOrigin } from './foreground-policy'
 import { isLiveContents } from './live-contents'
@@ -786,16 +786,24 @@ export class ProfileManager {
     return this.updateChecker
   }
 
-  /** Run a check now and report its outcome to the caller (the notification is
-   * shown by the checker itself). A failed request is an outcome, not a throw:
-   * being offline is not a command error. */
-  private async runUpdateCheck(): Promise<
+  /** Run a check now and report its outcome to the caller. The user sees it too:
+   * in a dialog on `parent` when they asked from inside Mira (origin 'ui', the
+   * App menu), as a desktop notification otherwise (a socket/MCP caller must not
+   * pull a dialog in front of the user). A failed request is an outcome, not a
+   * throw: being offline is not a command error. */
+  private async runUpdateCheck(
+    origin: CommandOrigin,
+    parent: BrowserWindow | null
+  ): Promise<
     | { state: 'newer'; version: string }
     | { state: 'up-to-date' }
     | { state: 'failed'; error: string }
   > {
     const seen: Outcome[] = []
-    await this.checker().checkNow((outcome) => seen.push(outcome))
+    await this.checker().checkNow(
+      (outcome) => seen.push(outcome),
+      origin === 'ui' ? (outcome) => presentInDialog(outcome, parent) : undefined
+    )
     const outcome = seen[0]
     if (!outcome) return { state: 'up-to-date' }
     if (outcome.kind === 'newer') return { state: 'newer', version: formatVersion(outcome.version) }
@@ -953,13 +961,16 @@ export class ProfileManager {
    * plaintext. Called on app quit so a session left unlocked is preserved instead of
    * discarded by reconcile at next startup — and pilotable as `lock-all-vaults` (a
    * panic-lock). Best-effort per profile: one failure is logged, the rest proceed. */
-  async lockAllVaults(): Promise<{ locked: string[] }> {
+  async lockAllVaults(
+    onProfile?: (profile: { id: string; label?: string }) => void
+  ): Promise<{ locked: string[] }> {
     this.lockingAll = true
     const locked: string[] = []
     try {
       for (const id of [...this.unlockedVaults.keys()]) {
         const password = this.unlockedVaults.get(id)
         if (password === undefined) continue
+        onProfile?.({ id, label: findById(this.profiles, id)?.label })
         try {
           await this.closeWindowAndWait(id)
           await this.performVaultLock(id, password)
@@ -5771,7 +5782,8 @@ export class ProfileManager {
       appVersion: () => app.getVersion(),
       // Same check as the daily one, on demand — and unlike the daily one it
       // answers even when Mira is up to date (update-check.ts).
-      checkForUpdates: () => this.runUpdateCheck(),
+      checkForUpdates: () =>
+        this.runUpdateCheck(origin, target && !target.window.isDestroyed() ? target.window : null),
       // Default-browser handoff: openUrl does its OWN targeting (an explicit
       // profileId, else the last-focused profile), independent of this context's
       // target window — the command may arrive over the socket while a different

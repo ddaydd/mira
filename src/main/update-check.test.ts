@@ -113,6 +113,17 @@ function harness(opts: {
 }
 
 describe('UpdateChecker', () => {
+  it('shows a manual check through `present` instead of the notification when given', async () => {
+    const h = harness({ current: '1.0.0', tag: 'v1.1.0' })
+    const presented: unknown[] = []
+    await h.checker.checkNow(undefined, (outcome) => {
+      presented.push(outcome)
+    })
+    expect(presented).toEqual([{ kind: 'newer', version: [1, 1, 0] }])
+    expect(h.shown).toEqual([])
+    expect(h.state.notifiedVersion).toBe('1.1.0')
+  })
+
   it('announces a newer release and remembers it, so the next daily check is silent', async () => {
     const h = harness({ current: '1.0.0', tag: 'v1.1.0' })
     await h.checker.checkNow()

@@ -186,7 +186,7 @@ that order, between the tab id and the title.
 | `list-audio-history` | —      | cross-profile: every open tab that has emitted sound, audible-now first then most recent first; `{entries:[{tabId, profileId, profileLabel, title, url, favicon, lastAudibleAt, audible}]}`. `lastAudibleAt` (epoch ms) is stamped on audio start and stop and persisted with the session |
 | `whoami`          | —      | id of the profile owning the target window                                                     |
 | `version`         | —      | `{version}` — the running app's version, no network                                            |
-| `check-for-updates` | —    | ask GitHub for the latest release NOW: `{current, state}` with `state` one of `newer` (+ `version`), `up-to-date`, `failed` (+ `error`). Always answers, unlike the daily check, which stays silent unless there is a version it has not announced yet. Also shows a native notification. A repo with no release answers `failed: no release published yet` |
+| `check-for-updates` | —    | ask GitHub for the latest release NOW: `{current, state}` with `state` one of `newer` (+ `version`), `up-to-date`, `failed` (+ `error`). Always answers, unlike the daily check, which stays silent unless there is a version it has not announced yet. Also shows the user the result: a native notification from the socket/MCP, a dialog on their window from the App menu (origin `ui`, `src/main/update-dialog.ts`). A repo with no release answers `failed: no release published yet` |
 
 ### Navigation (the active tab of the target window, or an explicit `tabId`)
 
