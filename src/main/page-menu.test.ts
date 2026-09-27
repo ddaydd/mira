@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { buildPageMenu, buildMediaItem, type PageContext } from './page-menu'
+import {
+  buildPageMenu,
+  buildMediaItem,
+  imageUnderPointSource,
+  needsImageProbe,
+  type PageContext
+} from './page-menu'
 
 const base: PageContext = {
   linkURL: '',
@@ -69,6 +75,22 @@ describe('buildPageMenu', () => {
     })
   })
 
+  it('adds "Open Image in New Tab" over an image, pointing at its src', () => {
+    const items = buildPageMenu({ ...base, mediaType: 'image', srcURL: 'https://x.com/a.png' })
+    expect(items).toContainEqual({
+      type: 'command',
+      command: 'new-tab',
+      params: { url: 'https://x.com/a.png' },
+      label: 'Open Image in New Tab',
+      enabled: true
+    })
+  })
+
+  it('offers no "Open Image in New Tab" off an image', () => {
+    const items = buildPageMenu(base)
+    expect(items.some((i) => 'label' in i && i.label === 'Open Image in New Tab')).toBe(false)
+  })
+
   it('routes a streamed (blob:) video to the yt-dlp download-stream item', () => {
     const items = buildPageMenu({ ...base, mediaType: 'video', srcURL: 'blob:https://x.com/abc' })
     expect(items).toContainEqual({ type: 'download-stream', label: 'Download Video' })
@@ -105,5 +127,28 @@ describe('buildMediaItem', () => {
     })
     expect(buildMediaItem('none', '')).toBeNull()
     expect(buildMediaItem('image', '')).toBeNull()
+  })
+})
+
+describe('image probe through overlays', () => {
+  const run = (stack: Array<Record<string, string>>): unknown => {
+    const document = { elementsFromPoint: () => stack }
+    return new Function('document', `return ${imageUnderPointSource(10, 20)}`)(document)
+  }
+
+  it('finds an image hidden under a transparent overlay', () => {
+    expect(run([{ tagName: 'DIV' }, { tagName: 'IMG', currentSrc: 'https://x.com/a.png' }])).toBe(
+      'https://x.com/a.png'
+    )
+  })
+
+  it('returns empty when no image is under the point', () => {
+    expect(run([{ tagName: 'DIV' }, { tagName: 'BODY' }])).toBe('')
+  })
+
+  it('only probes when Chromium saw no media', () => {
+    expect(needsImageProbe('none')).toBe(true)
+    expect(needsImageProbe('image')).toBe(false)
+    expect(needsImageProbe('video')).toBe(false)
   })
 })

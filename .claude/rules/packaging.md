@@ -21,6 +21,8 @@ paths:
 
 **Release publiée ≠ build local.** `bin/release.sh` fabrique un autre binaire : `bin/release-build.cjs` reprend `electron-builder.yml` sans identité, sans profil ni entitlements, le marque `miraDistribution: release`, puis le script le signe ad hoc et le publie sur GitHub. Ce binaire-là tourne sur n'importe quel Mac Apple Silicon, n'a pas Touch ID pour les passkeys, affiche une popup « unsigned » au lancement et se met à jour seul. Le build local, lui, n'est jamais remplacé par un téléchargement. Détail : `docs/releases.md`.
 
+⚠️ **Inspecter une `app.asar` sans jamais en extraire à la racine du repo.** `npx asar extract-file <asar> package.json` écrit le fichier dans le **dossier courant** : lancé depuis le repo, il a écrasé le `package.json` du repo par celui de l'app packagée (26/09/2026, réparé depuis `HEAD`). Pour lister ou mesurer, l'API en lecture seule suffit : `require('@electron/asar').listPackage(p)` et `getRawHeader(p).header` (tailles par entrée).
+
 **Provisioning profile : à renouveler tous les 7 jours.** `build/embedded.provisionprofile` porte l'entitlement AMFI `keychain-access-groups` sans lequel Touch ID / WebAuthn ne marche pas (voir `src/main/webauthn.ts`). Il est émis par le _personal team_ gratuit ZMKDR6H89Y et **expire au bout de 7 jours** ; passé ce délai il faut le refaire ET rebuilder, sinon l'entitlement cesse de valider au runtime.
 
 Un profil ne s'obtient pas à la demande : Xcode ne l'émet **que** s'il signe une app qui réclame une capability l'exigeant. Un projet sans entitlements signe très bien et ne produit aucun profil (vérifié 2026-07-29). D'où la recette, avec `xcodegen` :

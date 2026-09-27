@@ -192,6 +192,7 @@ function setup(): {
     }),
     closeWindow: () => ({ windowId: 'w1', closed: true }),
     sessionWindow: async () => ({ windowId: 'w1', tabId: null, created: false }),
+    findSessionWindow: () => null,
     closeSessionWindow: () => ({ windowIds: [], closed: false }),
     pinTab: (id: string) => ({ id, pinned: true }),
     unpinTab: (id: string) => ({ id, pinned: false }),

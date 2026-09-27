@@ -16,6 +16,13 @@ export interface SessionWindowContext {
     sessionId: string,
     opts: { pid?: number; profileId?: string }
   ) => Promise<{ windowId: string; tabId: string | null; created: boolean }>
+  /** The session's window, WITHOUT creating one: null when the session has none
+   * (in `profileId`, else at all). Several and no profile named throws, like
+   * sessionWindow. What `mira tabs --session` reads. */
+  findSessionWindow: (
+    sessionId: string,
+    opts: { profileId?: string }
+  ) => { windowId: string; tabId: string | null } | null
   /** Close every window of the session. Never quits Mira. */
   closeSessionWindow: (sessionId: string) => { windowIds: string[]; closed: boolean }
 }
@@ -48,6 +55,27 @@ export const sessionWindowCommands: CommandMap<CommandContext> = {
         ...(profileId !== undefined ? { profileId: profileId.trim() } : {})
       })
       return { ok: true, ...result }
+    } catch (error) {
+      return fail(error)
+    }
+  },
+
+  // Read-only twin of session-window: never opens a window. A separate command
+  // rather than a flag on session-window, so an older build answers "Unknown
+  // command" instead of ignoring the flag and opening one.
+  'find-session-window': (ctx, params) => {
+    const sessionId = sessionIdOf(params)
+    if (!sessionId) return { ok: false, error: 'missing "sessionId"' }
+    const { profileId } = (params ?? {}) as Partial<SessionWindowParams>
+    if (profileId !== undefined && (typeof profileId !== 'string' || profileId.trim() === '')) {
+      return { ok: false, error: '"profileId" must be a non-empty string' }
+    }
+    try {
+      const found = ctx.findSessionWindow(
+        sessionId,
+        profileId !== undefined ? { profileId: profileId.trim() } : {}
+      )
+      return found ? { ok: true, found: true, ...found } : { ok: true, found: false }
     } catch (error) {
       return fail(error)
     }

@@ -4,7 +4,9 @@ import {
   resolveScreenshotPath,
   screenshotFileName,
   clampCaptureSize,
-  MAX_CAPTURE_PX
+  MAX_CAPTURE_PX,
+  isSurfaceNotReady,
+  captureWhenPainted
 } from './screenshot'
 
 describe('parseScreenshotParams', () => {
@@ -113,5 +115,80 @@ describe('clampCaptureSize', () => {
       height: 1,
       clamped: false
     })
+  })
+})
+
+describe('isSurfaceNotReady', () => {
+  it('recognises the errors of a renderer that has not painted yet', () => {
+    expect(isSurfaceNotReady(new Error('Current display surface not available for capture'))).toBe(
+      true
+    )
+    expect(isSurfaceNotReady(new Error('UnknownVizError'))).toBe(true)
+    expect(isSurfaceNotReady(new Error('capture came back empty'))).toBe(true)
+  })
+
+  it('leaves every other failure alone', () => {
+    expect(isSurfaceNotReady(new Error('no active tab'))).toBe(false)
+    expect(isSurfaceNotReady(new Error('page layout metrics unavailable'))).toBe(false)
+  })
+})
+
+describe('captureWhenPainted', () => {
+  it('returns the first capture when the surface is ready', async () => {
+    let warmed = 0
+    const out = await captureWhenPainted(
+      async () => 'png',
+      async () => {
+        warmed++
+      }
+    )
+    expect(out).toBe('png')
+    expect(warmed).toBe(0)
+  })
+
+  it('warms the renderer and retries while no frame exists (first shot of a fresh window)', async () => {
+    const calls: string[] = []
+    let n = 0
+    const out = await captureWhenPainted(
+      async () => {
+        calls.push('capture')
+        if (++n < 3) throw new Error('Current display surface not available for capture')
+        return 'png'
+      },
+      async () => {
+        calls.push('warm')
+      }
+    )
+    expect(out).toBe('png')
+    expect(calls).toEqual(['capture', 'warm', 'capture', 'warm', 'capture'])
+  })
+
+  it('gives up after `tries` attempts with the original error', async () => {
+    let n = 0
+    await expect(
+      captureWhenPainted(
+        async () => {
+          n++
+          throw new Error('UnknownVizError')
+        },
+        async () => {},
+        4
+      )
+    ).rejects.toThrow('UnknownVizError')
+    expect(n).toBe(4)
+  })
+
+  it('never retries an unrelated failure', async () => {
+    let n = 0
+    await expect(
+      captureWhenPainted(
+        async () => {
+          n++
+          throw new Error('no active tab')
+        },
+        async () => {}
+      )
+    ).rejects.toThrow('no active tab')
+    expect(n).toBe(1)
   })
 })

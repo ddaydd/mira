@@ -67,6 +67,17 @@ export function buildPageMenu(ctx: PageContext): PageMenuItem[] {
   const mediaItem = buildMediaItem(ctx.mediaType, ctx.srcURL)
   if (mediaItem) items.push({ type: 'separator' }, mediaItem)
 
+  // Chrome-style "Open Image in New Tab": same `new-tab` command as a link.
+  if (ctx.mediaType === 'image' && ctx.srcURL) {
+    items.push({
+      type: 'command',
+      command: 'new-tab',
+      params: { url: ctx.srcURL },
+      label: 'Open Image in New Tab',
+      enabled: true
+    })
+  }
+
   if (ctx.linkURL) {
     items.push(
       { type: 'separator' },
@@ -96,6 +107,30 @@ export function buildPageMenu(ctx: PageContext): PageMenuItem[] {
   items.push({ type: 'separator' }, { type: 'inspect-element', label: 'Inspect Element' })
 
   return items
+}
+
+/** Page script returning the src of the first `<img>` stacked under viewport
+ * point (x, y), or '' when none. Chromium reports `mediaType: 'none'` when a
+ * transparent overlay sits on top of the image (a common anti-save trick), so
+ * the right-click menu falls back to this: `elementsFromPoint` sees through the
+ * overlay to the image below. */
+export function imageUnderPointSource(x: number, y: number): string {
+  return `(function () {
+    try {
+      var els = document.elementsFromPoint(${Math.round(x)}, ${Math.round(y)});
+      for (var i = 0; i < els.length; i++) {
+        var el = els[i];
+        if (el.tagName === 'IMG' && (el.currentSrc || el.src)) return el.currentSrc || el.src;
+      }
+    } catch (e) {}
+    return '';
+  })();`
+}
+
+/** Whether a right-click's media needs the in-page image probe: only when
+ * Chromium found no media at all under the cursor. Pure. */
+export function needsImageProbe(mediaType: string): boolean {
+  return mediaType === 'none' || mediaType === ''
 }
 
 /** The single "Download <media>" item for a right-click on media, or null when

@@ -39,6 +39,7 @@ import {
 import { CHROME_PARTITION } from './chrome-session'
 import { changeWindowFullScreen, changeWindowMaximized } from './window-state'
 import {
+  captureWhenPainted,
   clampCaptureSize,
   resolveScreenshotPath,
   type ScreenshotRequest,
@@ -180,8 +181,9 @@ import { ProfileData } from './profile-data'
 import { shouldGrantPermission } from './permissions'
 import { ensureTooltip, showTooltip, hideTooltip, destroyTooltip } from './tooltip-controller'
 import { ensureToast, showToast, destroyToast } from './toast-controller'
-import { buildPageMenu } from './page-menu'
+import { buildPageMenu, imageUnderPointSource, needsImageProbe } from './page-menu'
 import { buildTabMenu, type TabMenuItem } from './tab-menu'
+import { formatTabCloseLog, type TabCloseReason } from './tab-close-log'
 import { buildAudioMenu, type AudioMenuItem } from './audio-menu'
 import { buildFolderMenu, type FolderMenuItem } from './folder-menu'
 import {
@@ -1191,10 +1193,11 @@ export class ProfileManager {
    * below the user's frontmost window (inactive → showBehind), never written to
    * the saved session. The profile is the one named, else the only one open —
    * never a guess between identities. */
-  private async sessionWindowFor(
+  /** The session's open window (never creates one), or null. */
+  private findSessionWindowOf(
     sessionId: string,
-    opts: { pid?: number; profileId?: string }
-  ): Promise<{ windowId: string; tabId: string | null; created: boolean }> {
+    opts: { profileId?: string }
+  ): { windowId: string; tabId: string | null } | null {
     const found = this.sessionWindowRegistry.lookup(sessionId, opts.profileId, (id) =>
       this.isWindowOpen(id)
     )
@@ -1203,7 +1206,15 @@ export class ProfileManager {
       throw new Error(`this session has a window in several profiles (${list}); name one with --profile`)
     }
     const live = 'windowId' in found ? this.openById.get(found.windowId) : undefined
-    if (live) return { windowId: live.windowId, tabId: live.state.activeId, created: false }
+    return live ? { windowId: live.windowId, tabId: live.state.activeId } : null
+  }
+
+  private async sessionWindowFor(
+    sessionId: string,
+    opts: { pid?: number; profileId?: string }
+  ): Promise<{ windowId: string; tabId: string | null; created: boolean }> {
+    const existing = this.findSessionWindowOf(sessionId, opts)
+    if (existing) return { ...existing, created: false }
     const choice = sessionWindowProfile({
       requested: opts.profileId,
       openProfiles: [...this.openById.values()].map((pw) => pw.id),
@@ -1912,7 +1923,7 @@ export class ProfileManager {
       removeTab: (wc) => {
         const target = live()
         const id = target ? this.tabIdForWebContents(target, wc) : null
-        if (target && id) this.closeTabIn(target, id)
+        if (target && id) this.closeTabIn(target, id, 'neighbor', 'extension')
       },
       activeTab: () => {
         const target = live()
@@ -3325,10 +3336,13 @@ export class ProfileManager {
   private closeTabIn(
     pw: ProfileWindow,
     id: string,
-    focus: CloseFocus = 'neighbor'
+    focus: CloseFocus,
+    reason: TabCloseReason,
+    origin?: CommandOrigin
   ): { closed: boolean } {
     const index = pw.state.tabs.findIndex((t) => t.id === id)
     if (index === -1) throw new Error(`unknown tab: ${id}`)
+    console.log(formatTabCloseLog({ reason, tabId: id, windowId: pw.windowId, origin }))
     // Remember the tab so Cmd+Shift+T can reopen it, unless it is the transient
     // Settings tab (chrome, not a page — never worth restoring this way).
     if (id !== pw.settingsTabId) {
@@ -3475,7 +3489,8 @@ export class ProfileManager {
    * id closed (or armed), or null if the window is empty. */
   private closeActiveTabIn(
     pw: ProfileWindow,
-    focus: CloseFocus = 'neighbor'
+    focus: CloseFocus = 'neighbor',
+    origin?: CommandOrigin
   ): {
     closed: boolean
     id: string | null
@@ -3488,7 +3503,7 @@ export class ProfileManager {
       return { closed: false, id: decision.id, armed: true }
     }
     // closeTabIn clears closeArmedId when it closes the armed tab.
-    this.closeTabIn(pw, decision.id, focus)
+    this.closeTabIn(pw, decision.id, focus, 'close-active-tab', origin)
     return { closed: true, id: decision.id }
   }
 
@@ -4652,18 +4667,32 @@ export class ProfileManager {
    * (`command` items) route through deps.runCommand so they hit the same registry
    * bus as the toolbar / socket; clipboard items are native roles on the view. */
   private wireContextMenu(initialPw: ProfileWindow, wc: WebContents): void {
-    wc.on('context-menu', (_event, params) => {
+    wc.on('context-menu', async (_event, params) => {
+      let mediaType: string = params.mediaType
+      let srcURL = params.srcURL
+      // An overlay on top of an image hides it from Chromium: look through the
+      // stack in-page. Time-boxed so a busy page never delays the menu much.
+      if (needsImageProbe(mediaType)) {
+        const probed = await Promise.race([
+          evalInWebContents(wc, imageUnderPointSource(params.x, params.y)).catch(() => ''),
+          new Promise<string>((resolve) => setTimeout(() => resolve(''), 300))
+        ])
+        if (typeof probed === 'string' && probed) {
+          mediaType = 'image'
+          srcURL = probed
+        }
+      }
       // Pop the menu on the tab's CURRENT window (it may have been torn off).
       const pw = this.ownerByWebContents(wc) ?? initialPw
-      if (pw.window.isDestroyed()) return
+      if (pw.window.isDestroyed() || wc.isDestroyed()) return
       const items = buildPageMenu({
         linkURL: params.linkURL,
         selectionText: params.selectionText,
         isEditable: params.isEditable,
         canGoBack: wc.navigationHistory.canGoBack(),
         canGoForward: wc.navigationHistory.canGoForward(),
-        mediaType: params.mediaType,
-        srcURL: params.srcURL
+        mediaType,
+        srcURL
       })
       const template: MenuItemConstructorOptions[] = items.map((item) => {
         if (item.type === 'separator') return { type: 'separator' }
@@ -5246,9 +5275,9 @@ export class ProfileManager {
    * definition not focused while a script drives it — so `close-tab` on a tab of
    * any other window failed with `unknown tab` even though the id names exactly one
    * tab in the whole app. Same resolution as discardTabAnywhere / exec-js. */
-  private closeTabAnywhere(tabId: string): { closed: boolean } {
+  private closeTabAnywhere(tabId: string, origin?: CommandOrigin): { closed: boolean } {
     for (const pw of this.openById.values()) {
-      if (pw.state.tabs.some((t) => t.id === tabId)) return this.closeTabIn(pw, tabId)
+      if (pw.state.tabs.some((t) => t.id === tabId)) return this.closeTabIn(pw, tabId, 'neighbor', 'close-tab', origin)
     }
     throw new Error(`unknown tab: ${tabId}`)
   }
@@ -5517,8 +5546,22 @@ export class ProfileManager {
     fullPage: boolean
   ): Promise<{ png: Buffer; width: number; height: number; clamped: boolean }> {
     if (!fullPage) {
-      const image = await wc.capturePage()
-      if (image.isEmpty()) throw new Error('capture came back empty')
+      // A tab that has never been painted on screen (a session window ordered in
+      // below the user's window) has no surface yet: force a paint, wait for a
+      // frame, retry. Without this the first `shot` of such a window fails.
+      const image = await captureWhenPainted(
+        async () => {
+          const shot = await wc.capturePage()
+          if (shot.isEmpty()) throw new Error('capture came back empty')
+          return shot
+        },
+        async () => {
+          if (wc.isDestroyed()) throw new Error('tab closed during capture')
+          wc.invalidate()
+          await this.waitForFrame(wc)
+          await new Promise((resolve) => setTimeout(resolve, 100))
+        }
+      )
       const size = image.getSize()
       return { png: image.toPNG(), width: size.width, height: size.height, clamped: false }
     }
@@ -5909,7 +5952,7 @@ export class ProfileManager {
         const pdata = this.dataFor(target.id)
         const origin = new URL(url).origin
         // Close now for instant feedback; wipe detached (never awaited by the UI).
-        this.closeTabIn(target, activeId)
+        this.closeTabIn(target, activeId, 'neighbor', 'forget-domain')
         const done = this.forgetDomainData(sess, pdata, domain, origin)
         return { domain, closed: true, tabId: activeId, done }
       },
@@ -6364,10 +6407,10 @@ export class ProfileManager {
       },
       // Resolved across every open window (like discardTab): the id is globally
       // unique, and an external caller is never bound to the right window.
-      closeTab: (id) => this.closeTabAnywhere(id),
+      closeTab: (id) => this.closeTabAnywhere(id, origin),
       closeActiveTab: (focus) => {
         if (!target) throw new Error('no target window')
-        return this.closeActiveTabIn(target, focus)
+        return this.closeActiveTabIn(target, focus, origin)
       },
       duplicateActiveTab: () => {
         if (!target) throw new Error('no target window')
@@ -6429,6 +6472,7 @@ export class ProfileManager {
       // origin, same rule as close-profile — agents use `quit` for that).
       closeWindow: (windowId) => this.closeWindowById(windowId, origin === 'external'),
       sessionWindow: (sessionId, opts) => this.sessionWindowFor(sessionId, opts),
+      findSessionWindow: (sessionId, opts) => this.findSessionWindowOf(sessionId, opts),
       closeSessionWindow: (sessionId) => this.closeSessionWindowsOf(sessionId),
       pinTab: (id) => {
         if (!target) throw new Error('no target window')

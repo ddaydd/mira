@@ -22,6 +22,7 @@
 // Usage:
 //   mira tabs [--window <id>]       list tabs (id / title / url), * = active, z = asleep, ♪ = playing sound
 //                                   (--window: any window from `mira windows`, else the focused one)
+//   mira tabs --session [--profile <p>]  list THIS Claude session's own window (never opens one)
 //   mira use --url <substr>         resolve a tab by url, print export MIRA_TAB=<id>
 //   mira use --active               pin the focused window's active tab
 //   mira use <id>                   pin an explicit id
@@ -67,6 +68,7 @@ import {
   parseArgs,
   resolveTabId,
   sessionTarget,
+  sessionTabsTarget,
   matchProfileId,
   pickTabByUrl,
   buildExec,
@@ -394,6 +396,28 @@ async function main() {
     case 'tabs': {
       const req = { command: 'list-tabs' }
       if (typeof flags.window === 'string') req.params = { windowId: flags.window }
+      if (flags.session === true) {
+        const st = sessionTabsTarget({ flags, env: process.env })
+        if ('error' in st) return die(st.error, 2)
+        const params = { sessionId: st.sessionId }
+        if (st.profileFlag) {
+          const profs = await call({ command: 'list-profiles' }, socketPath, timeoutMs).catch(
+            (e) => die(e.message, 2)
+          )
+          if (!profs.ok) return die(JSON.stringify(profs), 1)
+          const match = matchProfileId(profs.profiles, st.profileFlag)
+          if ('error' in match) return die(match.error, 2)
+          params.profileId = match.id
+        }
+        const found = await call(
+          { command: 'find-session-window', params },
+          socketPath,
+          timeoutMs
+        ).catch((e) => die(e.message, 2))
+        if (!found.ok) return die(JSON.stringify(found), 1)
+        if (!found.found) return die('tabs --session: this session has no window open yet', 1)
+        req.params = { windowId: found.windowId }
+      }
       return send(req, { json, pretty: (r) => formatTabs(r.tabs, r.activeId) })
     }
 

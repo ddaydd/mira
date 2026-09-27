@@ -32,7 +32,9 @@ export const BOOLEAN_FLAGS = new Set([
   // click: --scroll brings an off-screen target into view before clicking.
   'scroll',
   // batch: --keep-going runs every line even after one fails.
-  'keep-going'
+  'keep-going',
+  // tabs: --session lists this Claude session's own window.
+  'session'
 ])
 
 /** Single-letter short flags, mapped to their long boolean name. `-n` == `--new-tab`.
@@ -189,6 +191,28 @@ export function sessionTarget({ command, positionals = [], flags = {}, tabId, en
   const out = { sessionId }
   const pid = Number(env.CLAUDE_PID)
   if (Number.isInteger(pid) && pid > 0) out.pid = pid
+  if (typeof flags.profile === 'string' && flags.profile.trim() !== '') {
+    out.profileFlag = flags.profile.trim()
+  }
+  return out
+}
+
+/**
+ * The `find-session-window` params for `mira tabs --session`: the calling Claude
+ * session's own window, never the user's. `tabs` alone keeps reading the focused
+ * window (it is how a session finds the page the USER has open), so the session
+ * window is opt-in. --window and --session name two different windows: refused.
+ *
+ * @param {{ flags?: Record<string, string|boolean>, env?: Record<string, string|undefined> }} src
+ * @returns {{ sessionId: string, profileFlag?: string } | { error: string }}
+ */
+export function sessionTabsTarget({ flags = {}, env = {} }) {
+  if (typeof flags.window === 'string') return { error: 'tabs: --session and --window conflict' }
+  const sessionId = (env.CLAUDE_CODE_SESSION_ID ?? '').trim()
+  if (!sessionId) {
+    return { error: 'tabs --session: not inside a Claude Code session (no CLAUDE_CODE_SESSION_ID)' }
+  }
+  const out = { sessionId }
   if (typeof flags.profile === 'string' && flags.profile.trim() !== '') {
     out.profileFlag = flags.profile.trim()
   }

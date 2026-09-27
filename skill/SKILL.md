@@ -36,6 +36,7 @@ effect and no process launched. It is the living source; what follows is only th
 ```bash
 mira tabs                              # tabs (id / ages / title / url); * = active, z = asleep, ♪ = sound
 mira tabs --window <id>                # ANOTHER window's strip (ids from `mira windows`)
+mira tabs --session                    # YOUR session window's strip (never opens one; --profile if several)
 mira windows                           # open windows (id / profile / tabs), * = focused
 mira close-window --params '{"windowId":"<id>"}'  # close ONE window (no id: the focused one)
 eval "$(mira use --url <substr>)"      # pin a tab → export MIRA_TAB=<uuid> (also: use <id>, use --active)
@@ -98,7 +99,8 @@ mira done                                        # close the session's windows
 - **Several profiles open and no `--profile` on the first call: refused**, never guessed (same
   rule as below). A session that already has a window in two profiles must name one too.
 - **`mira tabs` and `mira use` stay on the user's window**: they are how you find the page the
-  user has open. To act on it, pass `--tab <id>` on every command.
+  user has open. To act on it, pass `--tab <id>` on every command. To list your OWN session
+  window, `mira tabs --session` (fails if the session has no window yet; never opens one).
 - Mira closes by itself the windows of a session whose Claude process has died (every 30 s).
   `mira done` at the end of a task is still the polite move.
 - `MIRA_NO_SESSION_WINDOW=1` turns the mechanism off. On an older build, the CLI says so on stderr

@@ -130,6 +130,10 @@ So Mira keeps one window per agent session, per profile:
   open (the default one when Mira has none); several open profiles and none named
   is refused, never guessed. A session that already has windows in several
   profiles must name one.
+- `find-session-window {sessionId, profileId?}` is the read-only twin: it never
+  opens a window. `{found: true, windowId, tabId}` or `{found: false}`; several
+  windows and no `profileId` is refused like above. A separate command rather
+  than a flag, so an older build answers `Unknown command` instead of opening one.
 - `close-session-window {sessionId}` closes every window of the session
   (`{windowIds, closed}`); it never quits Mira.
 - `pid` is the agent's process. Every 30 s while a session window exists, Mira
@@ -140,7 +144,9 @@ set, `CLAUDE_PID` sent as `pid`) and with no `--tab`/`$MIRA_TAB`/`--window`, the
 verbs (`exec`, `click`, `wait`, `press`, `reload`, `shot`, `console`, `nav`, `open`,
 `batch`, and `call` of a tab-bound command) aim at the session's window;
 `--profile` picks its profile. `tabs` and `use` are left out on purpose: they are
-how a session finds the pages the USER has open. `mira done` closes the session's
+how a session finds the pages the USER has open; `mira tabs --session` lists the
+session's own window instead (through `find-session-window`, so it never opens
+one). `mira done` closes the session's
 windows. `MIRA_NO_SESSION_WINDOW=1` turns it off. Against a build without the
 command, the CLI says so on stderr and falls back to the old targeting. Pure
 logic: `src/main/session-windows.ts`, `sessionTarget` / `matchProfileId` in

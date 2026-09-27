@@ -1472,6 +1472,8 @@ export function makeContext(
       sessionWindows.push({ sessionId, ...(opts.pid ? { pid: opts.pid } : {}) })
       return { windowId, tabId: null, created: true }
     },
+    findSessionWindow: (sessionId: string) =>
+      openSessions.has(sessionId) ? { windowId: `session-${sessionId}`, tabId: null } : null,
     closeSessionWindow: (sessionId: string) => {
       if (!openSessions.delete(sessionId)) return { windowIds: [], closed: false }
       return { windowIds: [`session-${sessionId}`], closed: true }

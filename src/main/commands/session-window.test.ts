@@ -53,3 +53,39 @@ describe('close-session-window', () => {
     })
   })
 })
+
+describe('find-session-window', () => {
+  it('reports no window for a session that never opened one, and opens none', async () => {
+    const fake = makeContext()
+    const registry = createCommandRegistry()
+    expect(await registry.execute('find-session-window', { sessionId: 's1' }, fake.ctx)).toEqual({
+      ok: true,
+      found: false
+    })
+    expect(fake.sessionWindows).toEqual([])
+  })
+
+  it("returns the session's window once session-window created it", async () => {
+    const fake = makeContext()
+    const registry = createCommandRegistry()
+    await registry.execute('session-window', { sessionId: 's1' }, fake.ctx)
+    expect(await registry.execute('find-session-window', { sessionId: 's1' }, fake.ctx)).toEqual({
+      ok: true,
+      found: true,
+      windowId: 'session-s1',
+      tabId: null
+    })
+  })
+
+  it('rejects a missing session id and an empty profile', async () => {
+    const { ctx } = makeContext()
+    const registry = createCommandRegistry()
+    expect(await registry.execute('find-session-window', {}, ctx)).toEqual({
+      ok: false,
+      error: 'missing "sessionId"'
+    })
+    expect(
+      await registry.execute('find-session-window', { sessionId: 's', profileId: ' ' }, ctx)
+    ).toEqual({ ok: false, error: '"profileId" must be a non-empty string' })
+  })
+})

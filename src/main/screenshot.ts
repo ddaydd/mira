@@ -113,3 +113,33 @@ export function clampCaptureSize(size: { width: number; height: number }): {
   const height = Math.max(1, Math.min(Math.ceil(size.height), MAX_CAPTURE_PX))
   return { width, height, clamped: width < size.width || height < size.height }
 }
+
+/** Whether a failed capture only means "no frame yet": the tab's renderer has
+ * not handed the compositor a surface. A window born below the user's window
+ * (session windows, window-order.ts) has never been painted on screen when the
+ * first `shot` arrives, and Electron's capturePage then rejects with one of
+ * these (seen 2026-09-26 and 2026-09-27 on the first shot of a fresh session
+ * window, the second shot a few seconds later worked). An empty image is the
+ * same condition reported without an error. */
+export function isSurfaceNotReady(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error)
+  return /display surface not available|UnknownVizError|capture came back empty/i.test(message)
+}
+
+/** Run `capture`, and while it fails only because no frame exists yet, `warm`
+ * the renderer (force a paint, wait for a frame) and try again, up to `tries`
+ * attempts. Any other error, or the last not-ready one, propagates unchanged. */
+export async function captureWhenPainted<T>(
+  capture: () => Promise<T>,
+  warm: () => Promise<void>,
+  tries = 6
+): Promise<T> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await capture()
+    } catch (error) {
+      if (attempt >= tries || !isSurfaceNotReady(error)) throw error
+      await warm()
+    }
+  }
+}

@@ -4,6 +4,7 @@ import {
   parseArgs,
   resolveTabId,
   sessionTarget,
+  sessionTabsTarget,
   matchProfileId,
   pickTabByUrl,
   buildExec,
@@ -675,5 +676,31 @@ describe('matchProfileId', () => {
     expect(matchProfileId(profiles, 'pro')).toMatchObject({
       error: expect.stringContaining('several')
     })
+  })
+})
+
+describe('sessionTabsTarget', () => {
+  const env = { CLAUDE_CODE_SESSION_ID: 'sess-1' }
+
+  it("targets the calling session's window", () => {
+    expect(sessionTabsTarget({ flags: { session: true }, env })).toEqual({ sessionId: 'sess-1' })
+  })
+
+  it('passes --profile through to pick among the session windows', () => {
+    expect(sessionTabsTarget({ flags: { session: true, profile: ' perso ' }, env })).toEqual({
+      sessionId: 'sess-1',
+      profileFlag: 'perso'
+    })
+  })
+
+  it('refuses outside a Claude session and with --window', () => {
+    expect(sessionTabsTarget({ flags: { session: true }, env: {} })).toHaveProperty('error')
+    expect(sessionTabsTarget({ flags: { session: true, window: 'w1' }, env })).toEqual({
+      error: 'tabs: --session and --window conflict'
+    })
+  })
+
+  it('--session is a boolean flag: it never swallows the next word', () => {
+    expect(parseArgs(['tabs', '--session', '--json']).flags).toEqual({ session: true, json: true })
   })
 })
