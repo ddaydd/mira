@@ -12,6 +12,7 @@
 // from a physical one, and it goes through the same path press-key already uses.
 
 import type { CdpModifier } from './input-keys'
+import { parseRef, refTargetScript } from './page-snapshot/page-snapshot'
 
 /** One `Input.dispatchMouseEvent` payload. Loosely mirrors the CDP shape. */
 export interface CdpMouseEvent {
@@ -27,12 +28,13 @@ export interface CdpMouseEvent {
 // Same bitmask CDP uses for keyboard modifiers (Alt=1, Ctrl=2, Meta=4, Shift=8).
 const MODIFIER_BITS: Record<CdpModifier, number> = { alt: 1, ctrl: 2, meta: 4, shift: 8 }
 
-/** Where to click: a css selector, a piece of visible text, or raw viewport
- * coordinates. */
+/** Where to click: a css selector, a piece of visible text, raw viewport
+ * coordinates, or a ref from the last `snapshot` of the page. */
 export type ClickTarget =
   | { kind: 'selector'; value: string }
   | { kind: 'text'; value: string }
   | { kind: 'point'; x: number; y: number }
+  | { kind: 'ref'; ref: number }
 
 export interface ParsedClick {
   target: ClickTarget
@@ -51,16 +53,28 @@ const VALID_MODIFIERS = new Set<CdpModifier>(['alt', 'ctrl', 'meta', 'shift'])
 export function parseClickParams(params: unknown): ParsedClick | { error: string } {
   const p = (params ?? {}) as Record<string, unknown>
   const hasPoint = p.x !== undefined || p.y !== undefined
+  const hasRef = p.ref !== undefined
   const named = (['selector', 'text'] as const).filter(
     (k) => typeof p[k] === 'string' && (p[k] as string).length > 0
   )
-  if (named.length + (hasPoint ? 1 : 0) === 0) {
-    return { error: 'missing target: "selector", "text", or "x"/"y"' }
+  const count = named.length + (hasPoint ? 1 : 0) + (hasRef ? 1 : 0)
+  if (count === 0) {
+    return { error: 'missing target: "selector", "text", "ref", or "x"/"y"' }
   }
-  if (named.length + (hasPoint ? 1 : 0) > 1) return { error: 'one target at a time' }
+  if (count > 1) return { error: 'one target at a time' }
 
   let target: ClickTarget
-  if (hasPoint) {
+  if (hasRef) {
+    const ref = parseRef(p.ref)
+    if (typeof ref !== 'number') return ref
+    // Scrolling moves the page the snapshot described, so the ref's freshness
+    // check would refuse the click anyway: scroll, snapshot again, then click.
+    if (p.scroll === true) {
+      return { error: '"scroll" does not apply to a ref: scroll, then snapshot again' }
+    }
+    if (p.nth !== undefined) return { error: '"nth" does not apply to a ref' }
+    target = { kind: 'ref', ref }
+  } else if (hasPoint) {
     if (typeof p.x !== 'number' || typeof p.y !== 'number' || !isFinite(p.x) || !isFinite(p.y)) {
       return { error: '"x" and "y" must both be numbers (viewport coordinates)' }
     }
@@ -140,6 +154,7 @@ export function clickTargetScript(
   target: Exclude<ClickTarget, { kind: 'point' }>,
   opts: { nth: number; scroll: boolean }
 ): string {
+  if (target.kind === 'ref') return refTargetScript(target.ref, 'click')
   const v = literal(target.value)
   const collect =
     target.kind === 'selector'

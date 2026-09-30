@@ -211,6 +211,7 @@ import { installHoverReporter, reduceHover, hoverText, EMPTY_HOVER, type HoverEv
 import { evalInWebContents } from './cdp-eval'
 import { keyToDispatchEvents } from './input-keys'
 import { clickTargetScript, interpretClickTarget, mouseDispatchEvents } from './input-mouse'
+import { refTargetScript } from './page-snapshot/page-snapshot'
 import { pollUntil, waitProbeScript, waitTimeoutMessage } from './wait'
 import {
   type MagnifierState,
@@ -6299,6 +6300,42 @@ export class ProfileManager {
           if (!wasAttached) dbg.detach()
         }
         return { x: Math.round(point.x), y: Math.round(point.y), target: point.label }
+      },
+      typeInTab: async (ref, text, tabId) => {
+        // Jev's typing, on clickInTab's mechanics: click the field for real (so
+        // focus handlers and comboboxes wake up), select what is there, then
+        // insert the text through CDP, which fires the input events frameworks
+        // listen to. Replaces the field's content rather than appending to it.
+        const wc = this.webContentsForTab(target, tabId)
+        const id = tabId ?? target?.state.activeId ?? undefined
+        const visible = await this.ensurePageVisibleForInput(wc, id)
+        if (!visible) {
+          throw new Error(
+            'page is hidden, input would be dropped (tab unknown, or Mira window minimized/occluded)'
+          )
+        }
+        const point = interpretClickTarget(await evalInWebContents(wc, refTargetScript(ref, 'type')))
+        if ('error' in point) throw new Error(point.error)
+        const selectAll = { key: 'a', code: 'KeyA', modifiers: 4 }
+        const dbg = wc.debugger
+        const wasAttached = dbg.isAttached()
+        if (!wasAttached) dbg.attach('1.3')
+        try {
+          for (const ev of mouseDispatchEvents(point.x, point.y)) {
+            await dbg.sendCommand('Input.dispatchMouseEvent', ev)
+          }
+          await dbg.sendCommand('Input.dispatchKeyEvent', {
+            type: 'keyDown',
+            ...selectAll,
+            commands: ['selectAll']
+          })
+          await dbg.sendCommand('Input.dispatchKeyEvent', { type: 'keyUp', ...selectAll })
+          await dbg.sendCommand('Input.insertText', { text })
+        } finally {
+          // Only detach a debugger we attached; leave stealth's in place.
+          if (!wasAttached) dbg.detach()
+        }
+        return { target: point.label }
       },
       waitInTab: async (condition, tabId, timeoutMs) => {
         // Poll the condition in the page. Each probe is its own short evaluation:

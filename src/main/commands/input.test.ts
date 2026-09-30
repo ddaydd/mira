@@ -109,7 +109,7 @@ describe('click', () => {
     const { ctx, clicks } = makeContext()
     expect(await registry.execute('click', {}, ctx)).toEqual({
       ok: false,
-      error: 'missing target: "selector", "text", or "x"/"y"'
+      error: 'missing target: "selector", "text", "ref", or "x"/"y"'
     })
     expect(await registry.execute('click', { selector: 'a', text: 'b' }, ctx)).toEqual({
       ok: false,

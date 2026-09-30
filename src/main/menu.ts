@@ -217,6 +217,14 @@ export function appMenuTemplate(handlers: AppMenuHandlers): MenuItemConstructorO
         accelerator: 'CmdOrCtrl+K',
         click: () => handlers.togglePalette()
       },
+      // Hidden twin: Cmd+Shift+K opens the same palette, so a held Shift
+      // does not swallow the shortcut.
+      {
+        label: 'Command Palette…',
+        accelerator: 'CmdOrCtrl+Shift+K',
+        visible: false,
+        click: () => handlers.togglePalette()
+      },
       { type: 'separator' },
       {
         label: 'Open Location…',

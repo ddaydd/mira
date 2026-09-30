@@ -331,6 +331,7 @@ function setup(): {
     execJsInTab: (code: string) => Promise.resolve(`ran:${code}`),
     pressKeyInTab: () => Promise.resolve(),
     clickInTab: () => Promise.resolve({ x: 0, y: 0, target: 'stub' }),
+    typeInTab: () => Promise.resolve({ target: 'stub' }),
     waitInTab: () => Promise.resolve({ waitedMs: 0 }),
     toggleDevToolsInActiveTab: () => true,
     inspectCookiesInActiveTab: () => Promise.resolve(true),

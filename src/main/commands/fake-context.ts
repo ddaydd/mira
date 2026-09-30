@@ -21,7 +21,9 @@ import { waitTimeoutMessage, type WaitCondition } from '../wait'
 /** How a click target reads back in the fake's answer (the real one reports the
  * element it actually hit; here the request is all there is). */
 function describeClickTarget(target: ClickTarget): string {
-  return target.kind === 'point' ? 'point' : `${target.kind}:${target.value}`
+  if (target.kind === 'point') return 'point'
+  if (target.kind === 'ref') return `ref:${target.ref}`
+  return `${target.kind}:${target.value}`
 }
 import { cardLabel, validateCapture } from '../card'
 import { loginItemName, loginLabel, validateLogin } from '../login-capture'
@@ -210,6 +212,8 @@ export interface FakeContext {
   keyPresses: Array<{ key: string; tabId: string | null; modifiers: string[] | undefined }>
   /** Every click passed to clickInTab (click spy). */
   clicks: ParsedClick[]
+  /** Every by-ref typing passed to typeInTab (type-text spy). */
+  typings: Array<{ ref: number; text: string; tabId: string | null }>
   /** Every wait passed to waitInTab (wait-for spy). */
   waits: Array<{ condition: WaitCondition; tabId: string | null; timeoutMs: number }>
   /** Flip to make every wait time out, so the failure path is testable. */
@@ -311,6 +315,7 @@ export function makeContext(
   const keyPresses: Array<{ key: string; tabId: string | null; modifiers: string[] | undefined }> =
     []
   const clicks: ParsedClick[] = []
+  const typings: Array<{ ref: number; text: string; tabId: string | null }> = []
   const waits: Array<{ condition: WaitCondition; tabId: string | null; timeoutMs: number }> = []
   const waitFails = { value: false }
   const extractCalls: SkillSource[] = []
@@ -1200,6 +1205,21 @@ export function makeContext(
       const point =
         click.target.kind === 'point' ? { x: click.target.x, y: click.target.y } : { x: 10, y: 20 }
       return Promise.resolve({ ...point, target: describeClickTarget(click.target) })
+    },
+    typeInTab: (ref: number, text: string, tabId?: string) => {
+      // Same tab resolution as clickInTab; the fake has no page, so the ref is
+      // taken at its word (the in-page checks are page-snapshot.test.ts).
+      if (tabId !== undefined) {
+        const tab = state.tabs.tabs.find((t) => t.id === tabId)
+        if (!tab) return Promise.reject(new Error(`unknown tab: ${tabId}`))
+      } else {
+        const active = state.tabs.tabs.find((t) => t.id === state.tabs.activeId)
+        if (!active || active.id === state.settingsTabId) {
+          return Promise.reject(new Error('no active web page'))
+        }
+      }
+      typings.push({ ref, text, tabId: tabId ?? null })
+      return Promise.resolve({ target: `[${ref}] <input>` })
     },
     waitInTab: (condition: WaitCondition, tabId: string | undefined, timeoutMs: number) => {
       // Records the wait and answers instantly. Whether the condition ever holds
@@ -2194,6 +2214,7 @@ export function makeContext(
     execJs,
     keyPresses,
     clicks,
+    typings,
     waits,
     waitFails,
     extractCalls,

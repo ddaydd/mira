@@ -45,6 +45,7 @@ import { rootDomainCommands } from './root-domain'
 import { screenshotCommands } from './screenshot'
 import { settingsCommands } from './settings'
 import { skillsCommands } from './skills'
+import { snapshotCommands } from './snapshot'
 import { spacesCommands } from './spaces'
 import { statusCommands } from './status'
 import { tabFoldersCommands } from './tab-folders'
@@ -116,6 +117,7 @@ export type { LoginsContext, LoginInfo } from './logins'
 export type { LoginFillContext, FillCandidateInfo, FillResult } from './login-fill'
 export type { HistoryEntry } from '../history-store'
 export type { InputContext, PressKeyParams } from './input'
+export type { SnapshotContext } from './snapshot'
 export type { ParsedClick, ClickTarget, ClickPoint, CdpMouseEvent } from '../input-mouse'
 export {
   parseClickParams,
@@ -237,6 +239,7 @@ export function createCommandRegistry(): CommandRegistry {
     ...screenshotCommands,
     ...settingsCommands,
     ...skillsCommands,
+    ...snapshotCommands,
     ...spacesCommands,
     ...statusCommands,
     ...tabFoldersCommands,

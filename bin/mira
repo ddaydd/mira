@@ -30,6 +30,11 @@
 //   mira press <key> [--mod a,b]    send a real keypress (e.g. e, Enter, ArrowDown)
 //   mira click --selector <css>|--text <str>|--at <x,y>   a REAL mouse click (CDP), not a synthetic MouseEvent
 //                                   (--nth <n>: pick among several matches, 1-based; --scroll: scroll it in view first)
+//   mira snap                       the page as a numbered table of what it lets you do + its visible text
+//   mira click <ref>                click element [ref] from the last snap (also --ref <n>)
+//   mira type <ref> <text>          replace the text of field [ref] (real click + CDP text insertion)
+//   mira select <ref> <label>       pick a native dropdown option by label (--value <v>: by value)
+//                                   A ref action is REFUSED once the page moved since the snap: snap again.
 //   mira wait --selector <css>|--text <str>|--url <substr>  block until it holds, instead of sleeping blind
 //                                   (--gone: wait for it to disappear; --timeout <ms>, default 5000)
 //   mira batch <@file|-> [--keep-going]   run many lines over ONE connection: one process, one agent turn
@@ -90,6 +95,11 @@ import {
   resolveNavTarget,
   buildClick,
   buildWait,
+  buildSnapshot,
+  clickPositional,
+  buildType,
+  buildSelect,
+  formatSnapshot,
   parseBatchScript,
   buildBatch,
   formatBatchResults
@@ -446,7 +456,7 @@ async function main() {
       const built = buildClick(tabId, {
         selector: flags.selector,
         text: flags.text,
-        at: flags.at ?? positionals[0],
+        ...clickPositional(flags, positionals),
         nth: flags.nth,
         scroll: flags.scroll === true
       })
@@ -455,6 +465,28 @@ async function main() {
         json,
         pretty: (r) => `clicked ${r.target ?? 'point'} at ${r.x},${r.y}`
       })
+    }
+
+    case 'snap':
+    case 'snapshot':
+      // The page as a numbered table of what it lets you do, plus its visible
+      // text. The numbers are refs for `click <ref>`, `type`, `select`; any of
+      // them is refused once the page moved, so snap again after each action.
+      return send(buildSnapshot(tabId), { json, pretty: (r) => formatSnapshot(r) })
+
+    case 'type': {
+      const built = buildType(tabId, positionals[0], positionals.slice(1).join(' ') || flags.text)
+      if ('error' in built) return die(built.error, 2)
+      return send(built.request, { json, pretty: (r) => `typed into ${r.target}` })
+    }
+
+    case 'select': {
+      const built = buildSelect(tabId, positionals[0], {
+        label: positionals.slice(1).join(' ') || flags.label,
+        value: flags.value
+      })
+      if ('error' in built) return die(built.error, 2)
+      return send(built.request, { json, pretty: (r) => `selected ${JSON.stringify(r.label)} in ${r.target}` })
     }
 
     case 'wait': {

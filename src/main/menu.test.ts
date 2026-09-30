@@ -59,6 +59,22 @@ describe('the menu template', () => {
     expect(handlers.fillLogin).toHaveBeenCalledTimes(1)
   })
 
+  it('binds both Cmd+K and Cmd+Shift+K to the command palette', () => {
+    const handlers = makeHandlers()
+    const items = flatten(appMenuTemplate(handlers)).filter(
+      (item) => item.label === 'Command Palette…'
+    )
+    expect(items.map((item) => item.accelerator)).toEqual(['CmdOrCtrl+K', 'CmdOrCtrl+Shift+K'])
+    for (const item of items) {
+      item.click?.(
+        {} as Parameters<NonNullable<MenuItemConstructorOptions['click']>>[0],
+        undefined,
+        {} as KeyboardEvent
+      )
+    }
+    expect(handlers.togglePalette).toHaveBeenCalledTimes(2)
+  })
+
   it('routes Check for Updates to the checkForUpdates handler', () => {
     const handlers = makeHandlers()
     const item = find(appMenuTemplate(handlers), 'Check for Updates…')

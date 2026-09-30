@@ -37,6 +37,7 @@ import type { RevealTabContext } from './reveal-tab'
 import type { ScreenshotContext } from './screenshot'
 import type { SessionWindowContext } from './session-window'
 import type { SettingsContext } from './settings'
+import type { SnapshotContext } from './snapshot'
 import type { SkillsContext } from './skills'
 import type { SpacesContext } from './spaces'
 import type { StatusContext } from './status'
@@ -88,6 +89,7 @@ export type CommandContext = AppContext &
   SessionWindowContext &
   SettingsContext &
   SkillsContext &
+  SnapshotContext &
   SpacesContext &
   StatusContext &
   TabDetachContext &

@@ -213,7 +213,7 @@ describe('buildClick', () => {
   })
 
   it('refuses no target, two targets, and a zero nth', () => {
-    expect(buildClick(null, {}).error).toMatch(/--selector, --text or --at/)
+    expect(buildClick(null, {}).error).toMatch(/--selector, --text, --ref <n> or --at/)
     expect(buildClick(null, { selector: 'a', at: '1,2' }).error).toMatch(/one target/)
     expect(buildClick(null, { text: 'a', nth: '0' }).error).toMatch(/positive integer/)
   })

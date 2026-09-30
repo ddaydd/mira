@@ -6,7 +6,8 @@ import eslintPluginReactHooks from 'eslint-plugin-react-hooks'
 import eslintPluginReactRefresh from 'eslint-plugin-react-refresh'
 
 export default defineConfig(
-  { ignores: ['**/node_modules', '**/dist', '**/out'] },
+  // jev-snapshot.js is vendored verbatim from jev-ultrafast: never reformat it.
+  { ignores: ['**/node_modules', '**/dist', '**/out', 'src/main/page-snapshot/jev-snapshot.js'] },
   tseslint.configs.recommended,
   {
     rules: {

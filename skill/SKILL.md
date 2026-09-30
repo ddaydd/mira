@@ -43,6 +43,8 @@ eval "$(mira use --url <substr>)"      # pin a tab → export MIRA_TAB=<uuid> (a
 mira exec "document.title"             # exec-js in the pinned tab (or the active one if nothing is pinned)
 mira press e --mod meta,shift          # a REAL keystroke (CDP, isTrusted) — for keyboard-driven web apps
 mira click --text 'Settings'           # a REAL mouse click (CDP) — also --selector <css>, --at x,y, --nth n, --scroll
+mira snap                              # the page as a numbered table of what it lets you do + its visible text
+mira click 12                          # click element [12] of the last snap (type 3 London, select 2 Business)
 mira wait --selector '[role=dialog]'   # wait for it to appear instead of sleeping (--text, --url, --gone, --timeout ms)
 mira batch @script.mira                # N lines over ONE connection: one process, one agent turn (--keep-going)
 mira console --level error --limit 50  # the page's captured console: console.*, 403/CORS/CSP, exceptions
@@ -141,6 +143,8 @@ resolved INSIDE the page (`--selector`, or `--text` which keeps the deepest elem
 text), then clicked at its centre. It refuses rather than click into nothing: an invisible element,
 one outside the viewport (`--scroll` brings it in first), or one covered by something else at that
 point — the error says which.
+
+`mira snap` is the cheapest way to see a page you have to act on: one line per button, link, field and dropdown, numbered, with its current value, then the visible text. No screenshot, no selector to guess. Act by number: `mira click <n>`, `mira type <n> <text>` (replaces the field's content), `mira select <n> <label>` (or `--value`). A numbered action is **refused once the page moved** since the snap, your own previous action included: snap again after every action. That refusal is the point, it stops a click from landing on whatever replaced the element you read.
 
 `mira wait` replaces `sleep`. A `sleep 3` is too long when the page is already ready, and too short
 when it is not — and that second case does not read as "too early", it reads as "the element does

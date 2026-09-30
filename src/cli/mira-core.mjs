@@ -66,7 +66,10 @@ export const TAB_BOUND = new Set([
   'click',
   'wait-for',
   'get-console',
-  'screenshot'
+  'screenshot',
+  'snapshot',
+  'type-text',
+  'select-option'
 ])
 
 /**
@@ -709,18 +712,25 @@ export function buildWait(tabId, opts = {}) {
  */
 export function buildClick(tabId, opts = {}) {
   const str = (v) => (typeof v === 'string' && v.trim() !== '' ? v : null)
+  const at = str(opts.at)
+  const ref = str(opts.ref)
   const named = [
     ['selector', str(opts.selector)],
     ['text', str(opts.text)],
-    ['at', str(opts.at)]
+    ['at', at],
+    ['ref', ref]
   ].filter(([, v]) => v !== null)
-  if (named.length === 0) return { error: 'click needs --selector, --text or --at x,y' }
+  if (named.length === 0) return { error: 'click needs --selector, --text, --ref <n> or --at x,y' }
   if (named.length > 1) {
     return { error: `click takes one target, got ${named.map(([k]) => '--' + k).join(' and ')}` }
   }
   const [kind, value] = named[0]
   const params = {}
-  if (kind === 'at') {
+  if (kind === 'ref') {
+    const n = parseRef(value)
+    if (typeof n !== 'number') return n
+    params.ref = n
+  } else if (kind === 'at') {
     const parts = value.split(',').map((n) => Number(n.trim()))
     if (parts.length !== 2 || parts.some((n) => !Number.isFinite(n))) {
       return { error: `--at wants viewport coordinates, e.g. --at 320,180 (got "${value}")` }
@@ -739,6 +749,116 @@ export function buildClick(tabId, opts = {}) {
   if (opts.scroll === true) params.scroll = true
   if (tabId) params.tabId = tabId
   return { request: { command: 'click', params } }
+}
+
+/** The click target from a command line: `--ref`, `--at`, or the positional —
+ * a bare integer (`mira click 12`) is a snapshot ref, `x,y` a point.
+ *
+ * @param {Record<string, string|boolean>} flags
+ * @param {string[]} positionals
+ * @returns {{ at: unknown, ref: unknown }}
+ */
+export function clickPositional(flags, positionals) {
+  const p = positionals[0]
+  if (flags.at !== undefined || flags.ref !== undefined || p === undefined) {
+    return { at: flags.at, ref: flags.ref }
+  }
+  return /^\d+$/.test(p.trim()) ? { at: undefined, ref: p } : { at: p, ref: undefined }
+}
+
+/** A snapshot ref from the command line: a positive integer.
+ *
+ * @param {unknown} value
+ * @returns {number | { error: string }}
+ */
+function parseRef(value) {
+  const n = Number(value)
+  if (typeof value !== 'string' || !/^\d+$/.test(value.trim()) || !Number.isInteger(n) || n < 1) {
+    return { error: `a ref is a positive integer from \`mira snap\` (got "${value ?? ''}")` }
+  }
+  return n
+}
+
+/**
+ * snapshot plan: the page as an indexed table of what it lets you do.
+ *
+ * @param {string|null} tabId
+ * @returns {{ command: string, params: object }}
+ */
+export function buildSnapshot(tabId) {
+  return { command: 'snapshot', params: tabId ? { tabId } : {} }
+}
+
+/**
+ * type plan: replace the text of the field named by a snapshot ref.
+ *
+ * @param {string|null} tabId
+ * @param {unknown} ref
+ * @param {unknown} text
+ * @returns {{ request: {command:string, params:object} } | { error: string }}
+ */
+export function buildType(tabId, ref, text) {
+  const n = parseRef(ref)
+  if (typeof n !== 'number') return n
+  if (typeof text !== 'string' || text.length === 0) return { error: 'type needs <ref> <text>' }
+  const params = { ref: n, text }
+  if (tabId) params.tabId = tabId
+  return { request: { command: 'type-text', params } }
+}
+
+/**
+ * select plan: pick a native dropdown option by label (positional or --label)
+ * or by value (--value).
+ *
+ * @param {string|null} tabId
+ * @param {unknown} ref
+ * @param {{ label?: unknown, value?: unknown }} opts
+ * @returns {{ request: {command:string, params:object} } | { error: string }}
+ */
+export function buildSelect(tabId, ref, opts = {}) {
+  const n = parseRef(ref)
+  if (typeof n !== 'number') return n
+  const label = typeof opts.label === 'string' && opts.label !== '' ? opts.label : null
+  const value = typeof opts.value === 'string' ? opts.value : null
+  if ((label === null) === (value === null)) {
+    return { error: 'select needs <ref> and ONE of <label> / --label / --value' }
+  }
+  const params = label !== null ? { ref: n, label } : { ref: n, value }
+  if (tabId) params.tabId = tabId
+  return { request: { command: 'select-option', params } }
+}
+
+/**
+ * Render a snapshot for a reader (human or agent): one line per element, then
+ * the visible text.
+ *
+ * @param {{ title?: string, url?: string, elements?: any[], text?: string, omitted?: number, scroll?: {y:number,height:number}, viewport?: {w:number,h:number} }} snap
+ * @returns {string}
+ */
+export function formatSnapshot(snap) {
+  const lines = [`${snap.title ?? ''} — ${snap.url ?? ''}`]
+  for (const el of snap.elements ?? []) {
+    let line = `[${el.ref}] ${el.role} ${JSON.stringify(el.label)}`
+    if (el.value) line += ` = ${JSON.stringify(el.value)}`
+    for (const key of ['checked', 'selected', 'expanded']) {
+      if (el[key] !== undefined) line += ` ${key}=${el[key]}`
+    }
+    const ops = (el.ops ?? []).filter((op) => op !== 'click' || el.ops.length > 1)
+    if (ops.length > 0) line += `  (${ops.join(', ')})`
+    if (el.options?.length) {
+      line += `  options: ${el.options.map((o) => JSON.stringify(o.label)).join(', ')}`
+    }
+    lines.push(line)
+  }
+  if (snap.omitted) lines.push(`(${snap.omitted} more elements not listed)`)
+  const s = snap.scroll
+  const vh = snap.viewport?.h ?? 0
+  if (s && s.height > vh) {
+    const more = s.y + vh < s.height - 2 ? 'below' : 'above'
+    lines.push(`(scrolled ${s.y} of ${s.height}px; more ${more})`)
+  }
+  if (snap.text) lines.push('', snap.text)
+  return lines.join('\n')
 }
 
 /**
@@ -871,9 +991,19 @@ export function buildLineRequest(argv, env) {
       return buildClick(tabId, {
         selector: flags.selector,
         text: flags.text,
-        at: flags.at ?? positionals[0],
+        ...clickPositional(flags, positionals),
         nth: flags.nth,
         scroll: flags.scroll === true
+      })
+    case 'snap':
+    case 'snapshot':
+      return { request: buildSnapshot(tabId) }
+    case 'type':
+      return buildType(tabId, positionals[0], positionals.slice(1).join(' ') || flags.text)
+    case 'select':
+      return buildSelect(tabId, positionals[0], {
+        label: positionals.slice(1).join(' ') || flags.label,
+        value: flags.value
       })
     case 'wait':
     case 'wait-for':

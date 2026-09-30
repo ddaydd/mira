@@ -54,9 +54,25 @@ describe('parseClickParams', () => {
     })
   })
 
+  it('takes a snapshot ref, and refuses scroll/nth with it', () => {
+    expect(parsed(parseClickParams({ ref: 12 })).target).toEqual({ kind: 'ref', ref: 12 })
+    expect(parseClickParams({ ref: 0 })).toEqual({
+      error: '"ref" must be a positive integer (from snapshot)'
+    })
+    expect(parseClickParams({ ref: 12, scroll: true })).toHaveProperty('error')
+    expect(parseClickParams({ ref: 12, nth: 2 })).toHaveProperty('error')
+    expect(parseClickParams({ ref: 12, text: 'Go' })).toEqual({ error: 'one target at a time' })
+  })
+
+  it('resolves a ref target through the snapshot script', () => {
+    const script = clickTargetScript({ kind: 'ref', ref: 12 }, { nth: 1, scroll: false })
+    expect(script).toContain('const ref = 12;')
+    expect(script).toContain('take a new one')
+  })
+
   it('refuses no target, and refuses two', () => {
     expect(parseClickParams({})).toEqual({
-      error: 'missing target: "selector", "text", or "x"/"y"'
+      error: 'missing target: "selector", "text", "ref", or "x"/"y"'
     })
     expect(parseClickParams({ selector: 'a', x: 1, y: 2 })).toEqual({
       error: 'one target at a time'
