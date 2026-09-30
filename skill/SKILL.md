@@ -1,5 +1,5 @@
 ---
-description: "Drive Mira, a fully scriptable Chromium browser, through its `mira` CLI: target a tab, run JS in a page, open or navigate, extract text, capture a PNG. For pages behind a login that WebSearch and WebFetch cannot reach. Use when: 'look at the page I have open', 'in my browser', 'on LinkedIn', 'read this tab', 'regarde la page que j'ai ouverte', 'dans mon navigateur', 'lis cet onglet', or when the information sits behind the user's logged-in session."
+description: "Drive Mira, a fully scriptable Chromium browser, through its `mira` CLI: target a tab, run JS in a page, open or navigate, extract text, act on a page by number (click, type, pick an option), capture a PNG. For pages behind a login that WebSearch and WebFetch cannot reach. Use when: 'look at the page I have open', 'in my browser', 'on LinkedIn', 'read this tab', 'regarde la page que j'ai ouverte', 'dans mon navigateur', 'lis cet onglet', or when the information sits behind the user's logged-in session."
 ---
 
 # Mira — a scriptable browser
@@ -43,8 +43,10 @@ eval "$(mira use --url <substr>)"      # pin a tab → export MIRA_TAB=<uuid> (a
 mira exec "document.title"             # exec-js in the pinned tab (or the active one if nothing is pinned)
 mira press e --mod meta,shift          # a REAL keystroke (CDP, isTrusted) — for keyboard-driven web apps
 mira click --text 'Settings'           # a REAL mouse click (CDP) — also --selector <css>, --at x,y, --nth n, --scroll
-mira snap                              # the page as a numbered table of what it lets you do + its visible text
-mira click 12                          # click element [12] of the last snap (type 3 London, select 2 Business)
+mira snap                              # the page as a numbered list of what you can act on + its visible text
+mira click 12                          # click element [12] of the last snap
+mira type 3 London                     # replace the text of field [3] of the last snap
+mira select 2 Business                 # pick option "Business" of dropdown [2] (--value <v>: by value)
 mira wait --selector '[role=dialog]'   # wait for it to appear instead of sleeping (--text, --url, --gone, --timeout ms)
 mira batch @script.mira                # N lines over ONE connection: one process, one agent turn (--keep-going)
 mira console --level error --limit 50  # the page's captured console: console.*, 403/CORS/CSP, exceptions
@@ -144,7 +146,28 @@ text), then clicked at its centre. It refuses rather than click into nothing: an
 one outside the viewport (`--scroll` brings it in first), or one covered by something else at that
 point — the error says which.
 
-`mira snap` is the cheapest way to see a page you have to act on: one line per button, link, field and dropdown, numbered, with its current value, then the visible text. No screenshot, no selector to guess. Act by number: `mira click <n>`, `mira type <n> <text>` (replaces the field's content), `mira select <n> <label>` (or `--value`). A numbered action is **refused once the page moved** since the snap, your own previous action included: snap again after every action. That refusal is the point, it stops a click from landing on whatever replaced the element you read.
+**To act on a page (click, fill a form, pick an option), start with `mira snap`.** It prints one
+line per button, link, field and dropdown, each with a number and its current value, then the
+text visible in the viewport:
+
+```
+[1] textbox "Where to?" = "Paris"  (type, click)
+[2] combobox "Class" = "Economy"  (select)  options: "Business"
+[4] button "Search"
+```
+
+Then act by number: `mira click 4`, `mira type 1 London`, `mira select 2 Business`. No screenshot
+to read, no selector to guess, and the click and the typing are real (CDP) like `mira click`.
+
+**Snap again after every action.** A numbered action is refused (`the page changed since the
+snapshot: take a new one`) as soon as the page moved since the snap, and your own previous action
+counts: after `type`, the field's value changed, so the next `click` needs a fresh snap. This is
+on purpose: it stops a click from landing on whatever replaced the element you read. In a
+`mira batch`, write it as `snap` / `type 1 London` / `snap` / `click 4`.
+
+What snap does not see: elements inside iframes or shadow DOM, canvas apps, password and file
+fields, and text below the fold (scroll, then snap again). For those, fall back to
+`mira click --selector/--text` and `mira exec`.
 
 `mira wait` replaces `sleep`. A `sleep 3` is too long when the page is already ready, and too short
 when it is not — and that second case does not read as "too early", it reads as "the element does
