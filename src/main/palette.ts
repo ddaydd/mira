@@ -127,6 +127,13 @@ const STATIC_COMMANDS: ReadonlyArray<Omit<PaletteEntry, 'group'>> = [
     shortcut: '⌘S'
   },
   {
+    id: 'cmd:move-tab-to-top',
+    title: 'Move Tab to Top',
+    command: 'move-tab-to-top',
+    keywords: 'priority first head promote reorder up',
+    shortcut: '⌥⌘↑'
+  },
+  {
     id: 'cmd:reveal-tab',
     title: 'Reveal Tab in Sidebar',
     command: 'reveal-tab',

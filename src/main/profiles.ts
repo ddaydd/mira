@@ -67,6 +67,7 @@ import {
   formatMemory,
   nextZen,
   planReveal,
+  topIndexOf,
   buildTabMemoryReport,
   TracingSession,
   parseTraceParams
@@ -4548,7 +4549,12 @@ export class ProfileManager {
       // Cmd+Alt+Left / Cmd+Alt+Right: back/forward through recently-viewed tabs.
       // (Not Cmd+Shift+arrows: those collide with macOS text selection to
       // start/end of line, which we leave to the focused field.)
-      else if (input.alt && input.key === 'ArrowLeft') {
+      // Cmd+Alt+Up: send the active tab to the head of its group (pinned grid,
+      // its folder, or the loose tabs). Same method the move-tab-to-top command runs.
+      else if (input.alt && !input.shift && input.key === 'ArrowUp') {
+        this.moveTabToTopIn(pw)
+        event.preventDefault()
+      } else if (input.alt && input.key === 'ArrowLeft') {
         this.stepMruIn(pw, -1)
         event.preventDefault()
       } else if (input.alt && input.key === 'ArrowRight') {
@@ -4947,6 +4953,21 @@ export class ProfileManager {
     this.pushTabs(pw)
     this.saveSession(pw)
     return { moved }
+  }
+
+  /** Send a tab (default: the active one) to the head of its own group — pinned
+   * grid, its folder, or the loose tabs (see commands/tab-top.ts). Order-only,
+   * through moveTabIn: focus and the visible view do not change. */
+  private moveTabToTopIn(
+    pw: ProfileWindow,
+    tabId?: string
+  ): { id: string | null; moved: boolean; toIndex: number } {
+    const id = tabId ?? pw.state.activeId
+    const toIndex = id ? topIndexOf(pw.state.tabs, id) : null
+    if (!id || toIndex === null) return { id: null, moved: false, toIndex: -1 }
+    const moved = pw.state.tabs[toIndex].id !== id
+    if (moved) this.moveTabIn(pw, id, toIndex)
+    return { id, moved, toIndex }
   }
 
   private moveTabIn(pw: ProfileWindow, id: string, toIndex: number): { id: string } {
@@ -6626,6 +6647,10 @@ export class ProfileManager {
       removeTabFolder: (id) => {
         if (!target) throw new Error('no target window')
         return this.removeTabFolderIn(target, id)
+      },
+      moveTabToTop: (tabId) => {
+        if (!target) throw new Error('no target window')
+        return this.moveTabToTopIn(target, tabId)
       },
       revealTab: (tabId) => {
         if (!target) throw new Error('no target window')

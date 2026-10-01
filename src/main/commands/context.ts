@@ -34,6 +34,7 @@ import type { PaneContext } from './pane'
 import type { PermissionContext } from './permissions'
 import type { ProfileContext } from './profiles'
 import type { RevealTabContext } from './reveal-tab'
+import type { TabTopContext } from './tab-top'
 import type { ScreenshotContext } from './screenshot'
 import type { SessionWindowContext } from './session-window'
 import type { SettingsContext } from './settings'
@@ -97,6 +98,7 @@ export type CommandContext = AppContext &
   TabMemoryContext &
   TabMenuContext &
   TabTidyContext &
+  TabTopContext &
   TabsContext &
   ThemeContext &
   ToastContext &

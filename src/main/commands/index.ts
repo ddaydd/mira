@@ -54,6 +54,7 @@ import { sessionWindowCommands } from './session-window'
 import { tabMemoryCommands } from './tab-memory'
 import { tabMenuCommands } from './tab-menu'
 import { tabTidyCommands } from './tab-tidy'
+import { tabTopCommands } from './tab-top'
 import { tabsCommands } from './tabs'
 import { themeCommands } from './themes'
 import { toastCommands } from './toast'
@@ -204,6 +205,8 @@ export type { ZenContext, ZenState, PanelSnapshot } from './zen'
 export { nextZen } from './zen'
 export type { RevealTabContext, RevealPlan } from './reveal-tab'
 export { planReveal } from './reveal-tab'
+export type { TabTopContext, TabGroupMember } from './tab-top'
+export { topIndexOf } from './tab-top'
 
 export type CommandRegistry = CommandRegistryOf<CommandContext>
 
@@ -249,6 +252,7 @@ export function createCommandRegistry(): CommandRegistry {
     ...sessionWindowCommands,
     ...tabMenuCommands,
     ...tabTidyCommands,
+    ...tabTopCommands,
     ...tabsCommands,
     ...themeCommands,
     ...toastCommands,

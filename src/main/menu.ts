@@ -31,6 +31,9 @@ export interface AppMenuHandlers {
   /** Show where the active tab sits in the sidebar (Cmd+Shift+E): shows the
    * sidebar, expands its folder, scrolls to the row and flashes it. */
   revealTab: () => void
+  /** Send the active tab to the head of its group in the strip (Cmd+Alt+Up): the
+   * pinned grid, its folder, or the loose tabs. Wired to move-tab-to-top. */
+  moveTabToTop: () => void
   /** Navigate the focused window back / forward in its history. Wired to the
    * back / forward commands so the Cmd+Arrow accelerators stay pilotable. */
   goBack: () => void
@@ -321,6 +324,14 @@ export function appMenuTemplate(handlers: AppMenuHandlers): MenuItemConstructorO
         accelerator: 'CmdOrCtrl+Alt+Right',
         registerAccelerator: false,
         click: () => handlers.recentTabForward()
+      },
+      // Promote the active tab to the head of its group. Display-only accelerator,
+      // like Previous/Next Tab: the key is handled by wireTabShortcuts.
+      {
+        label: 'Move Tab to Top',
+        accelerator: 'CmdOrCtrl+Alt+Up',
+        registerAccelerator: false,
+        click: () => handlers.moveTabToTop()
       },
       {
         label: 'Reveal Tab in Sidebar',

@@ -178,6 +178,7 @@ function setup(): {
     reopenClosedTab: () => ({ reopened: false, id: null }),
     moveTab: (id: string) => ({ id }),
     tidyTabs: () => ({ moved: 0 }),
+    moveTabToTop: () => ({ id: 'tab-1', moved: false, toIndex: 0 }),
     detachTab: async () => ({ windowId: 'w', created: true }),
     moveTabToWindow: (_id: string, windowId: string) => ({ windowId }),
     activateTab: (id: string) => ({ windowId: 'w', id }),

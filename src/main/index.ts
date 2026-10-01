@@ -564,6 +564,7 @@ app.whenReady().then(async () => {
       // at once. Same bus as the socket / MCP (no arg → flip).
       toggleZen: () => runDetached('toggle-zen', {}, profiles.contextForFocused()),
       revealTab: () => runDetached('reveal-tab', {}, profiles.contextForFocused()),
+      moveTabToTop: () => runDetached('move-tab-to-top', {}, profiles.contextForFocused()),
       // Route the accelerators through the registry so they hit the same bus as
       // the toolbar buttons and the socket — the focused window is the target.
       goBack: () => runDetached('back', {}, profiles.contextForFocused()),

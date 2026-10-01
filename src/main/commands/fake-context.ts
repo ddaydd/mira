@@ -47,6 +47,7 @@ import { resolveScreenshotPath, type ScreenshotRequest, type ScreenshotResult } 
 import type { LlmConfig, ChatMessage, PageContext } from '../llm'
 import { nextZen, type PanelSnapshot } from './zen'
 import { planReveal } from './reveal-tab'
+import { topIndexOf } from './tab-top'
 import { PageConsoleStore, type PageConsoleDraft } from '../page-console'
 import {
   emptyTabState,
@@ -1620,6 +1621,14 @@ export function makeContext(
       if (tab.pinned === true && folderId !== null) return { moved: false }
       state.tabs = setTabFolderPure(state.tabs, tabId, folderId)
       return { moved: true }
+    },
+    moveTabToTop: (tabId?: string) => {
+      const id = tabId ?? state.tabs.activeId
+      const toIndex = id ? topIndexOf(state.tabs.tabs, id) : null
+      if (!id || toIndex === null) return { id: null, moved: false, toIndex: -1 }
+      const moved = state.tabs.tabs[toIndex].id !== id
+      if (moved) state.tabs = moveTabPure(state.tabs, id, toIndex)
+      return { id, moved, toIndex }
     },
     revealTab: (tabId?: string) => {
       const id = tabId ?? state.tabs.activeId
