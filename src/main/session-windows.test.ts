@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { SessionWindowRegistry, sessionWindowProfile } from './session-windows'
+import { SessionWindowRegistry, firstUserWindow, sessionWindowProfile } from './session-windows'
 
 const open =
   (...ids: string[]) =>
@@ -91,5 +91,27 @@ describe('sessionWindowProfile', () => {
     expect(sessionWindowProfile({ openProfiles: ['p1', 'p2'], fallback: 'd' })).toMatchObject({
       error: expect.stringContaining('--profile')
     })
+  })
+})
+
+describe('firstUserWindow (pure)', () => {
+  const w = (windowId: string): { windowId: string } => ({ windowId })
+  const session = open('s1', 's2')
+
+  it('skips a focused session window for the next user window', () => {
+    expect(firstUserWindow([w('s1'), w('u1'), w('u2')], session)).toEqual(w('u1'))
+  })
+
+  it('keeps the first candidate when it is a user window', () => {
+    expect(firstUserWindow([w('u1'), w('s1')], session)).toEqual(w('u1'))
+  })
+
+  it('skips holes left by a missing focused or last-focused window', () => {
+    expect(firstUserWindow([null, undefined, w('s2'), w('u2')], session)).toEqual(w('u2'))
+  })
+
+  it('returns null when only session windows are open', () => {
+    expect(firstUserWindow([w('s1'), null, w('s2')], session)).toBeNull()
+    expect(firstUserWindow([], session)).toBeNull()
   })
 })

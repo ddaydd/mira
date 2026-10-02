@@ -42,6 +42,7 @@ import {
   type GrantedPermissions,
   type PermissionsRequest
 } from './extension-permissions'
+import { shouldAttachPopout } from './extension-popout'
 import {
   toExtensionInfo,
   serviceWorkerLogLevel,
@@ -237,7 +238,7 @@ export class ExtensionsService {
       // "createWindow is not implemented", so the WebAuthn request hangs forever.
       // This creates a bare, session-bound BrowserWindow (like the lib's own
       // browser-action popup) that loads the extension URL — NOT a ProfileWindow.
-      createWindow: (details) => this.createExtensionPopout(ses, details)
+      createWindow: (details) => this.createExtensionPopout(ses, details, hooks.chromeWebContents())
       // assignTabDetails omitted: the lib only sees materialized tabs, so
       // `discarded` would be constant.
     })
@@ -272,7 +273,9 @@ export class ExtensionsService {
    * bare, session-bound BrowserWindow that loads the extension URL, so the page
    * gets the extension's preload and chrome.* APIs. NOT a ProfileWindow — it's
    * unknown to ProfileManager on purpose (findByWindow returns null for it).
-   * Used by Bitwarden's fido2 passkey/unlock picker. */
+   * Used by Bitwarden's fido2 passkey/unlock picker. Attached to the profile
+   * window when that window has the focus, so it cannot get lost behind it
+   * (extension-popout.ts). */
   private async createExtensionPopout(
     ses: Session,
     details: {
@@ -282,10 +285,16 @@ export class ExtensionsService {
       left?: number
       top?: number
       focused?: boolean
-    }
+    },
+    chromeWebContents: WebContents | null
   ): Promise<BrowserWindow> {
+    const profileWindow = chromeWebContents
+      ? BrowserWindow.fromWebContents(chromeWebContents)
+      : null
+    const attached = shouldAttachPopout(profileWindow)
     const win = new BrowserWindow({
       ...extensionPopoutBounds(details),
+      ...(attached && profileWindow ? { parent: profileWindow } : {}),
       show: false,
       // A titlebar so the user can always dismiss it; popout, not a full chrome.
       minimizable: false,
@@ -300,6 +309,10 @@ export class ExtensionsService {
       }
     })
     const url = Array.isArray(details.url) ? details.url[0] : details.url
+    // The origin only: the path of an extension page can name a vault item.
+    const origin = url ? url.split('/').slice(0, 3).join('/') : 'no url'
+    console.log(`[mira] extension popout opened: ${origin} (${attached ? 'attached' : 'free'})`)
+    win.once('closed', () => console.log(`[mira] extension popout closed: ${origin}`))
     if (url) {
       try {
         await win.loadURL(url)

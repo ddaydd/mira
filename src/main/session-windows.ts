@@ -112,3 +112,20 @@ export function sessionWindowProfile(opts: {
       `Name one with --profile <label|id>.`
   }
 }
+
+/** The first candidate that is a window of the USER's, skipping agent session
+ * windows (and holes in the list). A link clicked in another app must land where
+ * the user works: a session window is scratch space ordered in behind theirs, yet
+ * it can hold the focus as far as Electron knows, so the "focused, else last
+ * focused" chain picked it — the link opened in a window that flashed and went
+ * back under (seen 2026-10-02 with a Slack link). Null when every candidate is a
+ * session window. */
+export function firstUserWindow<T extends { windowId: string }>(
+  candidates: Iterable<T | null | undefined>,
+  ownedBySession: (windowId: string) => boolean
+): T | null {
+  for (const candidate of candidates) {
+    if (candidate && !ownedBySession(candidate.windowId)) return candidate
+  }
+  return null
+}

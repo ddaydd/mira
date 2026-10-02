@@ -25,6 +25,7 @@
 
 import { app, type WebContents } from 'electron'
 import { WINDOW_OPEN_SHIM_SOURCE } from './window-open-shim'
+import { WEBAUTHN_CONDITIONAL_SHIM_SOURCE } from './webauthn-conditional-shim'
 
 // ── Service-worker health instrumentation ──────────────────────────────────
 // WhatsApp Web (and other SW-dependent PWAs) hang on their splash forever when the
@@ -173,8 +174,11 @@ export const CHROME_SHIM_SOURCE = String.raw`
 
 /** Everything injected into a page's main world, in one blob: the Chrome fingerprint
  * shim above, then the window.open stub that keeps a tab-open from reading as a blocked
- * popup (window-open-shim.ts). Both are idempotent, so the re-assert below is safe. */
-const PAGE_SHIM_SOURCE = CHROME_SHIM_SOURCE + WINDOW_OPEN_SHIM_SOURCE
+ * popup (window-open-shim.ts), then the wrapper that keeps a passkey-autofill request
+ * pending instead of failing fast (webauthn-conditional-shim.ts). All are idempotent, so
+ * the re-assert below is safe. */
+const PAGE_SHIM_SOURCE =
+  CHROME_SHIM_SOURCE + WINDOW_OPEN_SHIM_SOURCE + WEBAUTHN_CONDITIONAL_SHIM_SOURCE
 
 // webContents we've already wired, so re-entry (both the global hook and any direct call
 // fire for the same view) doesn't attach twice.

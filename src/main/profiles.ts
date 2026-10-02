@@ -250,7 +250,8 @@ import {
   orderWindowBelow
 } from './mac-spaces'
 import { belowAnchor } from './window-order'
-import { SessionWindowRegistry, sessionWindowProfile } from './session-windows'
+import { SessionWindowRegistry, firstUserWindow, sessionWindowProfile } from './session-windows'
+import { inputReadiness, viewShown } from './input-underlay'
 import { locationAuthStatus, requestLocationAuthorization } from './mac-location'
 import { extractionScript, type SkillSource } from './skills'
 import { allowQuitNow, suppressQuitPrompt } from './quit'
@@ -401,6 +402,10 @@ interface ProfileWindow {
    * a second consecutive Cmd+W on the same tab closes it. Reset whenever the
    * active tab changes, so only truly back-to-back presses close. */
   closeArmedId: string | null
+  /** Background tabs whose view is shown UNDER the active one so scripted input
+   * reaches them without selecting them (input-underlay.ts). A tab leaves the
+   * set when it becomes active (layout). */
+  inputUnderlay: Set<string>
   /** Which surface of this window last held the keyboard: its chrome (address
    * bar, palette, settings) or the active tab's page. Fed by the 'focus' event of
    * each webContents, and re-applied when the window itself is focused — Electron
@@ -1338,12 +1343,16 @@ export class ProfileManager {
       // A link/file opened from ANOTHER app (a terminal `open foo.html`, a chat
       // client) leaves Mira unfocused, so getFocusedWindow() is null. Fall back to
       // the last focused profile window (menuFocusId, kept in sync on every 'focus'),
-      // then to any open one.
-      target =
-        this.findByWindow(BrowserWindow.getFocusedWindow()) ??
-        (this.menuFocusId ? this.aWindowForProfile(this.menuFocusId) : null) ??
-        this.openById.values().next().value ??
-        null
+      // then to any open one. Never an agent's session window: those can read as
+      // focused while sitting behind the user's own (session-windows.ts).
+      target = firstUserWindow(
+        [
+          this.findByWindow(BrowserWindow.getFocusedWindow()),
+          ...(this.menuFocusId ? this.windowsForProfile(this.menuFocusId) : []),
+          ...this.openById.values()
+        ],
+        (windowId) => this.sessionWindowRegistry.owns(windowId)
+      )
     }
     if (!target || target.window.isDestroyed()) {
       this.openProfile(DEFAULT_PROFILE_ID, raise)
@@ -1689,6 +1698,7 @@ export class ProfileManager {
       zenSnapshot: null,
       settingsTabId: null,
       closeArmedId: null,
+      inputUnderlay: new Set(),
       focusTarget: 'page',
       closedTabs: [],
       mru: emptyMru(),
@@ -3092,8 +3102,21 @@ export class ProfileManager {
       // While the palette OR the media gallery is open, every view is hidden so
       // the chrome overlay is visible over what would otherwise be the page (see
       // paletteOpen / mediaGalleryOpen).
-      const active = id === pw.state.activeId && !pw.paletteOpen && !pw.mediaGalleryOpen
-      view.setVisible(active)
+      const overlayOpen = pw.paletteOpen || pw.mediaGalleryOpen
+      const active = id === pw.state.activeId && !overlayOpen
+      // A tab that became active is no longer an underlay (input-underlay.ts).
+      if (id === pw.state.activeId) pw.inputUnderlay.delete(id)
+      const underlaid = pw.inputUnderlay.has(id)
+      const shown = viewShown({
+        isActive: id === pw.state.activeId,
+        underlaid,
+        activeHasView: !!pw.state.activeId && pw.views.has(pw.state.activeId),
+        overlayOpen
+      })
+      view.setVisible(shown)
+      // An underlaid tab keeps the plain page bounds: it sits under the active
+      // view, live for scripted input, and its own DevTools stays hidden.
+      if (shown && !active) view.setBounds(bounds)
       if (active && id === fullScreenTabId) {
         view.setBounds({ x: 0, y: 0, width, height })
         pw.devtools.get(id)?.setVisible(false)
@@ -3903,8 +3926,9 @@ export class ProfileManager {
    * Two rules, both from use:
    *   - Never raise the window. A scripting command must not steal the foreground
    *     (foreground-policy.ts), and the user cannot keep Mira in front while they
-   *     work (2026-09-10). The only escalation is selecting the tab in its own
-   *     window.
+   *     work (2026-09-10). Nor select the tab: a background tab is shown under
+   *     the active one (input-underlay.ts), so the user keeps the tab they are
+   *     reading. Selecting it is the fallback when nothing would cover it.
    *   - Never report a false success. A tab whose renderer is hidden DROPS CDP
    *     input: measured 2026-09-10, 13 keystrokes into a focused login field left
    *     it empty while press-key answered ok.
@@ -3921,15 +3945,34 @@ export class ProfileManager {
     if (id) {
       const pw = this.ownerOf(id)
       if (!pw || pw.window.isDestroyed()) return false
-      const switched = pw.state.activeId !== id
-      if (switched) {
+      // A background tab is shown UNDER the active one rather than selected, so
+      // the user keeps the tab they are on (input-underlay.ts).
+      const overlayOpen = pw.paletteOpen || pw.mediaGalleryOpen
+      const view = pw.views.get(id)
+      const readiness = inputReadiness({
+        isActive: pw.state.activeId === id,
+        activeHasView: !!view && !!pw.state.activeId && pw.views.has(pw.state.activeId),
+        overlayOpen
+      })
+      let switched = false
+      if (readiness === 'underlay' && view) {
+        switched = !pw.inputUnderlay.has(id)
+        if (switched) {
+          pw.inputUnderlay.add(id)
+          // Bottom of the z-order: every other view stays above it.
+          pw.window.contentView.addChildView(view, 0)
+          this.layout(pw)
+        }
+      } else if (readiness === 'activate') {
+        switched = true
         try {
           this.activateTabById(id)
         } catch {
           return false
         }
       }
-      if (pw.state.activeId === id && !wc.getBackgroundThrottling()) {
+      const live = pw.state.activeId === id || (pw.inputUnderlay.has(id) && !overlayOpen)
+      if (live && !wc.getBackgroundThrottling()) {
         if (switched) await this.waitForFrame(wc)
         return true
       }

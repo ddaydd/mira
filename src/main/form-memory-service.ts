@@ -5,8 +5,8 @@
 // resolves which PROFILE it belongs to (values never cross profiles) and which
 // registrable domain the frame is on -> shouldRemember decides -> the value joins
 // that field's MRU list -> the file is rewritten, debounced. On the next focus,
-// the frame asks for the field's values and Chromium's datalist popup does the
-// rest.
+// the frame asks for the field's values and draws them in its own popup
+// (form-memory-shim.ts).
 //
 // Storage is userData/form-memory.json, one file for every profile (keyed by
 // profile id inside), next to card-vaults.json. Nothing secret is in it by
