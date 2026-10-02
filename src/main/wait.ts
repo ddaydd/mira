@@ -16,7 +16,7 @@
 
 /** What to wait for. `gone` inverts the condition (wait for it to stop holding). */
 export interface WaitCondition {
-  kind: 'selector' | 'text' | 'url'
+  kind: 'selector' | 'text' | 'url' | 'host'
   value: string
   gone: boolean
 }
@@ -35,16 +35,21 @@ export interface ParsedWait {
   tabId?: string
 }
 
-/** Validate the `wait-for` params. Exactly one of selector/text/url: two
+/** The condition names, in the order they are reported. */
+const CONDITION_KINDS = ['selector', 'text', 'url', 'host'] as const
+
+/** Validate the `wait-for` params. Exactly one of selector/text/url/host: two
  * conditions in one call would silently wait on whichever we happened to check,
  * which is the kind of ambiguity that makes an automation script unexplainable. */
 export function parseWaitParams(params: unknown): ParsedWait | { error: string } {
   const p = (params ?? {}) as Record<string, unknown>
-  const named = (['selector', 'text', 'url'] as const).filter(
+  const named = CONDITION_KINDS.filter(
     (k) => typeof p[k] === 'string' && (p[k] as string).length > 0
   )
   if (named.some((k) => typeof p[k] !== 'string')) return { error: 'invalid condition' }
-  if (named.length === 0) return { error: 'missing condition: "selector", "text" or "url"' }
+  if (named.length === 0) {
+    return { error: 'missing condition: "selector", "text", "url" or "host"' }
+  }
   if (named.length > 1) {
     return { error: `one condition at a time, got ${named.map((k) => `"${k}"`).join(' and ')}` }
   }
@@ -89,6 +94,12 @@ export function waitProbeScript(condition: WaitCondition): string {
     // innerText, not textContent: it is the RENDERED text, so hidden nodes and
     // <script> bodies do not count as the text being on screen.
     holds = `(document.body ? document.body.innerText : '').includes(${v})`
+  } else if (condition.kind === 'host') {
+    // The page's own host, or a subdomain of it. `url` cannot answer "which
+    // site am I on": an OAuth page carries the site it will return to in its
+    // query string, so `url: "verisoul.ai"` held on accounts.google.com
+    // (2026-10-02, redirect_url parameter) one millisecond into the wait.
+    holds = `(() => { const h = location.hostname.toLowerCase(); const w = ${v}.toLowerCase(); return h === w || h.endsWith('.' + w) })()`
   } else {
     holds = `location.href.includes(${v})`
   }
@@ -104,7 +115,9 @@ export function describeCondition(condition: WaitCondition): string {
       ? `selector ${JSON.stringify(condition.value)}`
       : condition.kind === 'text'
         ? `text ${JSON.stringify(condition.value)}`
-        : `url containing ${JSON.stringify(condition.value)}`
+        : condition.kind === 'host'
+          ? `host ${JSON.stringify(condition.value)}`
+          : `url containing ${JSON.stringify(condition.value)}`
   return `${what} ${condition.gone ? 'gone' : 'present'}`
 }
 

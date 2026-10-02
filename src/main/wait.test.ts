@@ -42,7 +42,7 @@ describe('parseWaitParams', () => {
 
   it('refuses no condition, and refuses two at once', () => {
     expect(parseWaitParams({})).toEqual({
-      error: 'missing condition: "selector", "text" or "url"'
+      error: 'missing condition: "selector", "text", "url" or "host"'
     })
     expect(parseWaitParams({ selector: 'a', url: '/x' })).toEqual({
       error: 'one condition at a time, got "selector" and "url"'
@@ -59,6 +59,17 @@ describe('parseWaitParams', () => {
 
   it('refuses a blank tabId', () => {
     expect(parseWaitParams({ selector: 'a', tabId: ' ' })).toEqual({ error: 'invalid "tabId"' })
+  })
+})
+
+describe('parseWaitParams host', () => {
+  it('accepts a host condition, and still only one condition at a time', () => {
+    expect(parseWaitParams({ host: 'example.com' })).toMatchObject({
+      condition: { kind: 'host', value: 'example.com', gone: false }
+    })
+    expect(parseWaitParams({ host: 'example.com', url: '/x' })).toEqual({
+      error: 'one condition at a time, got "url" and "host"'
+    })
   })
 })
 
@@ -80,6 +91,17 @@ describe('waitProbeScript', () => {
     expect(waitProbeScript(cond({ kind: 'url', value: '/settings' }))).toContain(
       'location.href.includes("/settings")'
     )
+  })
+
+  it('matches a host and its subdomains, never a mention in the query string', () => {
+    const js = waitProbeScript(cond({ kind: 'host', value: 'Verisoul.ai' }))
+    const holds = (href: string): unknown => new Function('location', `return ${js}`)(new URL(href))
+    expect(holds('https://verisoul.ai/')).toBe(true)
+    expect(holds('https://dashboard.verisoul.ai/settings')).toBe(true)
+    expect(holds('https://notverisoul.ai/')).toBe(false)
+    expect(
+      holds('https://accounts.google.com/signin?redirect_url=https%3A%2F%2Fdashboard.verisoul.ai')
+    ).toBe(false)
   })
 
   it('negates the whole condition for gone', () => {
@@ -177,6 +199,7 @@ describe('pollUntil', () => {
 describe('messages', () => {
   it('says what was watched, both ways', () => {
     expect(describeCondition(cond({ kind: 'text', value: 'People' }))).toBe('text "People" present')
+    expect(describeCondition(cond({ kind: 'host', value: 'a.b' }))).toBe('host "a.b" present')
     expect(describeCondition(cond({ value: '.spinner', gone: true }))).toBe(
       'selector ".spinner" gone'
     )

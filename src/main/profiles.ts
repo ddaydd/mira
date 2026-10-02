@@ -250,6 +250,15 @@ import {
   orderWindowBelow
 } from './mac-spaces'
 import { belowAnchor } from './window-order'
+import {
+  armDeliveryScript,
+  deliveryVerdict,
+  droppedInputMessage,
+  readDeliveryScript,
+  DELIVERY_READ_INTERVAL_MS,
+  DELIVERY_READ_TRIES,
+  type InputKind
+} from './input-delivery'
 import { SessionWindowRegistry, firstUserWindow, sessionWindowProfile } from './session-windows'
 import { inputReadiness, viewShown } from './input-underlay'
 import { locationAuthStatus, requestLocationAuthorization } from './mac-location'
@@ -2077,7 +2086,9 @@ export class ProfileManager {
       // iframes NESTED in web pages — Kondo's ext.html (extensions-plan.md §8.11).
       // Both session preloads (the lib's and ours) gate out of non-extension
       // frames immediately, so the per-iframe cost is negligible.
-      // backgroundThrottling: false keeps a covered window's tab inputtable.
+      // backgroundThrottling: false keeps a covered window's tab inputtable —
+      // together with the occlusion switch of chromium-switches.ts: alone it
+      // stopped being enough (Electron 44, measured 2026-10-02).
       // Electron then sets `disable_hidden_` on the tab's RenderWidgetHost
       // (electron_api_web_contents.cc, HandleNewRenderFrame, 41-x-y), so the
       // renderer keeps running and taking input. The page still REPORTS
@@ -3907,6 +3918,42 @@ export class ProfileManager {
     // to the page; a scripted activate leaves focus where the user put it.
     this.selectTabIn(pw, tabId, { focusPage: raise })
     return { windowId: pw.windowId, id: tabId }
+  }
+
+  /** Send CDP input through `dispatch`, then confirm on evidence that the page
+   * received it (input-delivery.ts). ensurePageVisibleForInput only deduces that
+   * a tab should take input, and the deduction failed for a fully covered
+   * window (measured 2026-10-02, cause fixed in chromium-switches.ts): the
+   * dispatch answered ok and the page got nothing. Throws when the page was watching and saw no event; stays silent
+   * when it cannot know (input aimed at a frame, or a page that navigated). */
+  private async dispatchChecked(
+    wc: WebContents,
+    kind: InputKind,
+    point: { x: number; y: number } | undefined,
+    dispatch: () => Promise<void>
+  ): Promise<void> {
+    const read = async (final: boolean): Promise<unknown> => {
+      try {
+        return await evalInWebContents(wc, readDeliveryScript(final))
+      } catch {
+        // Mid-navigation, or a renderer that is gone: nothing to conclude.
+        return null
+      }
+    }
+    let observable: unknown = false
+    try {
+      observable = await evalInWebContents(wc, armDeliveryScript(kind, point))
+    } catch {
+      // No probe, no verdict: the dispatch goes out as it always did.
+    }
+    await dispatch()
+    let verdict = deliveryVerdict(observable, await read(false))
+    for (let i = 1; verdict === 'dropped' && i < DELIVERY_READ_TRIES; i++) {
+      await new Promise((resolve) => setTimeout(resolve, DELIVERY_READ_INTERVAL_MS))
+      verdict = deliveryVerdict(observable, await read(false))
+    }
+    await read(true)
+    if (verdict === 'dropped') throw new Error(droppedInputMessage(kind))
   }
 
   /** True when the tab's page reports `document.visibilityState === 'visible'`.
@@ -6307,7 +6354,9 @@ export class ProfileManager {
         const wasAttached = dbg.isAttached()
         if (!wasAttached) dbg.attach('1.3')
         try {
-          for (const ev of events) await dbg.sendCommand('Input.dispatchKeyEvent', ev)
+          await this.dispatchChecked(wc, 'key', undefined, async () => {
+            for (const ev of events) await dbg.sendCommand('Input.dispatchKeyEvent', ev)
+          })
         } finally {
           // Only detach a debugger we attached; leave stealth's in place.
           if (!wasAttached) dbg.detach()
@@ -6358,7 +6407,9 @@ export class ProfileManager {
         const wasAttached = dbg.isAttached()
         if (!wasAttached) dbg.attach('1.3')
         try {
-          for (const ev of events) await dbg.sendCommand('Input.dispatchMouseEvent', ev)
+          await this.dispatchChecked(wc, 'mouse', point, async () => {
+            for (const ev of events) await dbg.sendCommand('Input.dispatchMouseEvent', ev)
+          })
         } finally {
           // Only detach a debugger we attached; leave stealth's in place.
           if (!wasAttached) dbg.detach()
@@ -6385,9 +6436,13 @@ export class ProfileManager {
         const wasAttached = dbg.isAttached()
         if (!wasAttached) dbg.attach('1.3')
         try {
-          for (const ev of mouseDispatchEvents(point.x, point.y)) {
-            await dbg.sendCommand('Input.dispatchMouseEvent', ev)
-          }
+          // The click is the checked part: if the page does not get it, the
+          // text below would be inserted into nothing.
+          await this.dispatchChecked(wc, 'mouse', point, async () => {
+            for (const ev of mouseDispatchEvents(point.x, point.y)) {
+              await dbg.sendCommand('Input.dispatchMouseEvent', ev)
+            }
+          })
           await dbg.sendCommand('Input.dispatchKeyEvent', {
             type: 'keyDown',
             ...selectAll,

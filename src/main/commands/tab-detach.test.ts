@@ -97,6 +97,15 @@ describe('activate-tab', () => {
     expect(tabState().activeId).toBe('tab-1')
   })
 
+  it('takes the tab as tabId too, the spelling of the page-bound commands', async () => {
+    const { ctx, tabState } = makeContext()
+    const registry = createCommandRegistry()
+    await registry.execute('new-tab', { url: 'example.com' }, ctx)
+    const result = await registry.execute('activate-tab', { tabId: 'tab-1' }, ctx)
+    expect(result).toMatchObject({ ok: true, id: 'tab-1' })
+    expect(tabState().activeId).toBe('tab-1')
+  })
+
   it('rejects a missing id', async () => {
     const { ctx } = makeContext()
     const registry = createCommandRegistry()

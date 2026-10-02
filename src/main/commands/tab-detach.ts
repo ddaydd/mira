@@ -116,7 +116,11 @@ export const tabDetachCommands: CommandMap<CommandContext> = {
   },
 
   'activate-tab': (ctx, params) => {
-    const { id } = (params ?? {}) as Partial<{ id: string }>
+    // `tabId` is accepted as well as `id`: the page-bound commands (exec-js,
+    // click, press-key, wait-for) all name the tab `tabId`, and a caller coming
+    // from one of those should not have to learn a second spelling.
+    const p = (params ?? {}) as Partial<{ id: string; tabId: string }>
+    const id = p.id ?? p.tabId
     if (typeof id !== 'string' || id.trim() === '') {
       return { ok: false, error: 'missing "id"' }
     }

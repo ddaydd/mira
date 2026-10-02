@@ -47,7 +47,7 @@ mira snap                              # the page as a numbered list of what you
 mira click 12                          # click element [12] of the last snap
 mira type 3 London                     # replace the text of field [3] of the last snap
 mira select 2 Business                 # pick option "Business" of dropdown [2] (--value <v>: by value)
-mira wait --selector '[role=dialog]'   # wait for it to appear instead of sleeping (--text, --url, --gone, --timeout ms)
+mira wait --selector '[role=dialog]'   # wait for it to appear instead of sleeping (--text, --url, --host, --gone, --timeout ms)
 mira batch @script.mira                # N lines over ONE connection: one process, one agent turn (--keep-going)
 mira console --level error --limit 50  # the page's captured console: console.*, 403/CORS/CSP, exceptions
 mira shot /tmp/page.png                # PNG capture of the pinned/active tab (--full = whole page)
@@ -82,7 +82,9 @@ for testing a page.
 
 **A window the socket creates opens below the frontmost one, not on top** (`open-profile` on a
 closed profile, `detach-tab`, a session window). It stays fully drivable while covered: `exec`,
-`shot` and `requestAnimationFrame` work there (measured 2026-09-26). Code from 2026-09-26
+`shot`, real input and `requestAnimationFrame` work there — **on a Mira built after 2026-10-02**.
+Before that build, a window entirely covered by another one painted no frame and dropped every
+`click`, `press` and `type` while answering ok (see "A click that answers ok" below). Code from 2026-09-26
 (`src/main/window-order.ts`): **it only applies to a Mira built after that day**. On an older
 build, the window still lands on top of every app, without taking the keyboard.
 
@@ -138,6 +140,30 @@ Chromium drops a key sent to a hidden page, so the tab is made visible in ITS wi
 app. If the page stays invisible, the command fails instead of lying: tell the user and ask them to
 bring the window forward, **not** call `focus-app` to get unstuck.
 
+**A click that answers ok, then nothing happens.** After every `click`, `press` and `type`, Mira
+asks the page whether it received the event, and fails with `input was dropped: …` when it did not
+(code from 2026-10-02: **only on a Mira built after that day**; the same build also stops Chromium
+from freezing a covered window, which was the cause, so the error should now be rare). On an older
+build the same situation answers `clicked …` and the page gets nothing: four clicks were lost that
+way on a login page, in a session window fully covered by another app. So on any build, when an
+action has no visible effect, check delivery before blaming the page:
+
+```bash
+mira exec "window.__seen=0; addEventListener('pointerdown',()=>__seen=1,true); 'armed'"
+mira click --text 'Sign in'
+mira exec "__seen"          # 0 = the page never got the click
+```
+
+What to do when input is dropped, in this order:
+
+1. Do the action through the page's own code when it has one (`form.requestSubmit()`, the app's
+   global client, `element.click()` where a synthetic click is enough). `exec` keeps working in a
+   covered window.
+2. Redo the step in a hidden tab of one of the user's own windows, where input was measured to
+   land: `MIRA_NO_SESSION_WINDOW=1 mira open <url> -b --window <id>` (id from `mira windows`), then
+   `--tab <id>` on every command, and `mira call close-tab --params '{"id":"<id>"}'` at the end.
+3. Tell the user the window is covered. Never `mira focus`.
+
 `mira click` is the mouse counterpart of `mira press`, and exists for the same reason: a
 `MouseEvent` built in `exec-js` carries `isTrusted: false` and most real apps ignore it — or handle
 only part of it, which is worse, since the call answers `ok` and nothing moves. The target is
@@ -173,6 +199,11 @@ fields, and text below the fold (scroll, then snap again). For those, fall back 
 when it is not — and that second case does not read as "too early", it reads as "the element does
 not exist", two hundred milliseconds before it appears. It returns the time actually waited, and on
 timeout it says what it was looking for and for how long.
+
+**`--url` matches anywhere in the address, query string included.** A login page carries the site it
+will return to (`?redirect_url=https://app.example.com/…`), so `mira wait --url example.com` holds
+on the identity provider's page, one millisecond in. To wait for the tab to be back ON a site, use
+`mira wait --host example.com` (the hostname or a subdomain of it; a Mira built after 2026-10-02).
 
 `mira batch` folds a sequence into a single turn. One line = what you would type after `mira`
 (`#` lines and blank lines are ignored), everything goes over one connection, and **it stops at the
@@ -327,11 +358,15 @@ before concluding.
   `slice()`. Cutting "to be safe" creates a false need for a patch (a second script to fetch the
   end), doubles the calls and misses content. Only split if the page is truly huge, and say so
   explicitly.
-- **Type long text into a field with `execCommand('insertText')`, not N `press` calls.** A
-  250-character sentence is 250 round trips with `press`, several minutes. The fast path is one
-  call: click the field (or `focus()` it), then `document.execCommand('insertText', false,
-  '<text>')` — the browser inserts it like a real keystroke, so React and controlled forms
-  (Typeform, Notion, most SPAs) see it. ⚠️ **Setting `input.value` directly does not work** on a
+- **Type text into a field with `mira type <ref> <text>` (after a `mira snap`), not N `press`
+  calls.** A 250-character sentence is 250 round trips with `press`, several minutes; `type` is one
+  call that clicks the field for real, selects what is there and inserts the text through CDP.
+  **`document.execCommand('insertText', false, '<text>')` is the fallback**, for a field `snap`
+  does not see (iframe, shadow DOM): it works on React and controlled forms (Typeform, Notion, most
+  SPAs), but not everywhere. Seen 2026-10-02 on an e-mail field that turns addresses into tags: the
+  text was in the DOM value, the form had not seen it and its submit button stayed disabled, while
+  `mira type` followed by `mira press ,` produced the tags. So after an `execCommand`, read the
+  form's state (button enabled, tag present), not the field's value. ⚠️ **Setting `input.value` directly does not work** on a
   React field, even through the native `HTMLInputElement.prototype` setter followed by a
   `dispatchEvent('input')`: the value is rewritten on the next render and the field comes out
   empty, with no error. To replace the content rather than append, `t.select()` before inserting.

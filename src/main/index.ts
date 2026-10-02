@@ -1,6 +1,7 @@
 // MUST be the first import: its module-level side effect enables the extension
 // lib's `debug` logging before that lib binds its instances (see log.ts).
 import { initLogging } from './log'
+import { applyChromiumSwitches } from './chromium-switches'
 import { app, BrowserWindow, dialog, globalShortcut, ipcMain, session } from 'electron'
 import { join } from 'path'
 import { pathToFileURL } from 'url'
@@ -184,6 +185,10 @@ app.setName('Mira')
 // Chromium switches must land early).
 const logging = initLogging(app.getPath('userData'))
 console.log(`[mira] logging to ${logging.logsDir}`)
+
+// Chromium switches Mira cannot work without (a covered window must keep taking
+// scripted input). Before app ready, like the logging switches above.
+applyChromiumSwitches(app.commandLine)
 
 // Fill the native "About Mira" panel (app menu → About) with true metadata,
 // overriding the package.json scaffold defaults ("example.com", a doubled

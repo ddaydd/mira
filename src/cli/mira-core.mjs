@@ -668,14 +668,14 @@ export function resolveNavTarget(windows, opts = {}, labels = {}) {
 
 /**
  * wait-for plan: block until a condition holds in the page. Exactly one of
- * selector / text / url names WHAT to wait for; `--gone` waits for it to stop
+ * selector / text / url / host names WHAT to wait for; `--gone` waits for it to stop
  * holding. The point is to delete `sleep` from automation scripts: a fixed sleep
  * is too long when the page is already there and too short when it is not — and
  * the short case is the dangerous one, since it reads as "the element does not
  * exist" a few hundred ms before it appears.
  *
  * @param {string|null} tabId
- * @param {{ selector?: unknown, text?: unknown, url?: unknown, gone?: boolean, timeout?: unknown }} opts
+ * @param {{ selector?: unknown, text?: unknown, url?: unknown, host?: unknown, gone?: boolean, timeout?: unknown }} opts
  * @returns {{ request: {command:string, params:object} } | { error: string }}
  */
 export function buildWait(tabId, opts = {}) {
@@ -683,9 +683,10 @@ export function buildWait(tabId, opts = {}) {
   const named = [
     ['selector', str(opts.selector)],
     ['text', str(opts.text)],
-    ['url', str(opts.url)]
+    ['url', str(opts.url)],
+    ['host', str(opts.host)]
   ].filter(([, v]) => v !== null)
-  if (named.length === 0) return { error: 'wait needs --selector, --text or --url' }
+  if (named.length === 0) return { error: 'wait needs --selector, --text, --url or --host' }
   if (named.length > 1) {
     return { error: `wait takes one condition, got ${named.map(([k]) => '--' + k).join(' and ')}` }
   }
@@ -1011,6 +1012,7 @@ export function buildLineRequest(argv, env) {
         selector: flags.selector,
         text: flags.text,
         url: flags.url,
+        host: flags.host,
         gone: flags.gone === true,
         timeout: flags.timeout
       })

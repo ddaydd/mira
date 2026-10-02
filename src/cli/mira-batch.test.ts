@@ -186,7 +186,7 @@ describe('buildWait', () => {
   })
 
   it('refuses zero conditions, and refuses two', () => {
-    expect(buildWait(null, {}).error).toMatch(/--selector, --text or --url/)
+    expect(buildWait(null, {}).error).toMatch(/--selector, --text, --url or --host/)
     expect(buildWait(null, { selector: 'a', text: 'b' }).error).toMatch(/--selector and --text/)
   })
 

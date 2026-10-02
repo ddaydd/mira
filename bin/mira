@@ -35,8 +35,10 @@
 //   mira type <ref> <text>          replace the text of field [ref] (real click + CDP text insertion)
 //   mira select <ref> <label>       pick a native dropdown option by label (--value <v>: by value)
 //                                   A ref action is REFUSED once the page moved since the snap: snap again.
-//   mira wait --selector <css>|--text <str>|--url <substr>  block until it holds, instead of sleeping blind
+//   mira wait --selector <css>|--text <str>|--url <substr>|--host <domain>  block until it holds, instead of sleeping blind
 //                                   (--gone: wait for it to disappear; --timeout <ms>, default 5000)
+//                                   --url matches anywhere in the address, query string included; to know
+//                                   which SITE the tab is on (after a login redirect), use --host
 //   mira batch <@file|-> [--keep-going]   run many lines over ONE connection: one process, one agent turn
 //                                   (a line = what you'd type after `mira`; # comments and blanks ignored;
 //                                    stops at the first failure unless --keep-going)
@@ -495,6 +497,7 @@ async function main() {
         selector: flags.selector,
         text: flags.text,
         url: flags.url,
+        host: flags.host,
         gone: flags.gone === true,
         timeout: flags.timeout
       })

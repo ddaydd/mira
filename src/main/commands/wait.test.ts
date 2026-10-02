@@ -60,7 +60,7 @@ describe('wait-for', () => {
     const { ctx, waits } = makeContext()
     expect(await registry.execute('wait-for', {}, ctx)).toEqual({
       ok: false,
-      error: 'missing condition: "selector", "text" or "url"'
+      error: 'missing condition: "selector", "text", "url" or "host"'
     })
     expect(await registry.execute('wait-for', { selector: 'a', text: 'b' }, ctx)).toEqual({
       ok: false,
