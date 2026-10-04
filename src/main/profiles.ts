@@ -4796,7 +4796,7 @@ export class ProfileManager {
    * the pure, tested buildPageMenu (from the click target + this view's history);
    * here we only translate it to Electron menu items and popup. Mira actions
    * (`command` items) route through deps.runCommand so they hit the same registry
-   * bus as the toolbar / socket; clipboard items are native roles on the view. */
+   * bus as the toolbar / socket; clipboard items run on the view itself. */
   private wireContextMenu(initialPw: ProfileWindow, wc: WebContents): void {
     wc.on('context-menu', async (_event, params) => {
       let mediaType: string = params.mediaType
@@ -4827,7 +4827,12 @@ export class ProfileManager {
       })
       const template: MenuItemConstructorOptions[] = items.map((item) => {
         if (item.type === 'separator') return { type: 'separator' }
-        if (item.type === 'role') return { role: item.role, label: item.label }
+        if (item.type === 'role') {
+          // Run the edit action on THIS view explicitly. A native `role` item goes
+          // to the window's first responder, which is not necessarily the page
+          // that was right-clicked, so its Copy could copy nothing.
+          return { label: item.label, click: () => wc[item.role]() }
+        }
         if (item.type === 'download-stream') {
           // Resolve the precise permalink at the click point, then hand it to
           // yt-dlp via the registry (elementFromPoint runs in the tab, not here).

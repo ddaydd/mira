@@ -8,7 +8,8 @@
 // Mira actions (back / forward / reload / open-in-new-tab) are emitted as
 // `command` items so they route through the same registry bus as the toolbar and
 // the socket (the "tout pilotable" principle). Clipboard actions have no registry
-// command and are emitted as native `role` items acting on the focused view.
+// command and are emitted as `role` items, which the popup runs on the
+// right-clicked view itself (not the window's first responder).
 
 /** What the right-click landed on, distilled from Electron's ContextMenuParams
  * plus the target view's history state. */
@@ -86,6 +87,13 @@ export function buildPageMenu(ctx: PageContext): PageMenuItem[] {
         command: 'new-tab',
         params: { url: ctx.linkURL },
         label: 'Open Link in New Tab',
+        enabled: true
+      },
+      {
+        type: 'command',
+        command: 'copy-text',
+        params: { text: ctx.linkURL },
+        label: 'Copy Link Address',
         enabled: true
       }
     )

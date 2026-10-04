@@ -18,6 +18,7 @@ import { appCommands } from './app'
 import { audioCommands } from './audio'
 import { audioHistoryCommands } from './audio-history'
 import { bookmarksCommands } from './bookmarks'
+import { clipboardCommands } from './clipboard'
 import { cardsCommands } from './cards'
 import { consoleCommands } from './console'
 import { cookieCommands } from './cookies'
@@ -216,6 +217,7 @@ export function createCommandRegistry(): CommandRegistry {
     ...audioCommands,
     ...bookmarksCommands,
     ...cardsCommands,
+    ...clipboardCommands,
     ...formMemoryCommands,
     ...consoleCommands,
     ...cookieCommands,

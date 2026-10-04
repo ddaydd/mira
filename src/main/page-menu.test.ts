@@ -45,6 +45,17 @@ describe('buildPageMenu', () => {
     })
   })
 
+  it('adds a "Copy Link Address" command when on a link', () => {
+    const items = buildPageMenu({ ...base, linkURL: 'https://example.com/a' })
+    expect(items).toContainEqual({
+      type: 'command',
+      command: 'copy-text',
+      params: { text: 'https://example.com/a' },
+      label: 'Copy Link Address',
+      enabled: true
+    })
+  })
+
   it('offers the full clipboard set in an editable field', () => {
     const items = buildPageMenu({ ...base, isEditable: true })
     const roles = items.filter((i) => i.type === 'role').map((i) => i.type === 'role' && i.role)
