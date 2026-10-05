@@ -1122,3 +1122,37 @@ export function formatBatchResults(results) {
     `${ran.length - failed} ok, ${failed} failed` + (skipped > 0 ? `, ${skipped} skipped` : '')
   return [...body, summary].join('\n')
 }
+
+/**
+ * The `client` every socket request must carry (socket.ts rejects one without):
+ * the name command.log writes next to each command, so "who pulled Mira in front"
+ * has an answer. Built from what identifies the caller, not what it claims to do:
+ * `$MIRA_CLIENT` first when set (a script naming itself), then `mira-cli`, the
+ * Claude Code session id when there is one, and the working directory.
+ *
+ * @param {Record<string, string|undefined>} env
+ * @param {string} cwd
+ * @returns {string}
+ */
+export function clientName(env, cwd) {
+  const parts = []
+  const own = (env.MIRA_CLIENT ?? '').trim()
+  if (own) parts.push(own)
+  parts.push('mira-cli')
+  const session = (env.CLAUDE_CODE_SESSION_ID ?? '').trim()
+  if (session) parts.push(`session=${session}`)
+  if (cwd) parts.push(`cwd=${cwd}`)
+  return parts.join(' ')
+}
+
+/**
+ * Stamp a request with its caller. An explicit `client` already on the request
+ * wins, so `mira call` passthroughs keep what they were given.
+ *
+ * @param {{ command?: string, cmd?: string, params?: object, client?: string }} request
+ * @param {string} client
+ */
+export function withClient(request, client) {
+  if (typeof request.client === 'string' && request.client.trim() !== '') return request
+  return { client, ...request }
+}

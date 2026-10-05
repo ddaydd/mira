@@ -6,11 +6,13 @@ import { app, BrowserWindow, dialog, globalShortcut, ipcMain, session } from 'el
 import { join } from 'path'
 import { pathToFileURL } from 'url'
 import { readFileSync, writeFileSync, mkdirSync } from 'fs'
+import { appendFile } from 'fs/promises'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { createCommandRegistry, type CommandContext } from './commands'
 import { startCommandSocket, cleanupSocket, type CommandSocketHandle } from './socket'
 import { FocusFeed } from './focus-feed'
+import { formatCommandEntry, lastCommand } from './command-log'
 import { forwardToRunningInstance } from './single-instance'
 import { ProfileManager, DEFAULT_PROFILE_ID } from './profiles'
 import { CHROME_PARTITION, DEFAULT_SESSION_ALIAS } from './chrome-session'
@@ -665,12 +667,19 @@ app.whenReady().then(async () => {
   ipcMain.handle('command', (event, name: string, params?: unknown) => {
     return registry.execute(name, params, profiles.contextForChrome(event.sender))
   })
+  // One line per socket request: who (the mandatory `client`), what, ok or not.
+  const commandLogPath = join(app.getPath('userData'), 'command.log')
   commandSocket = startCommandSocket(
     SOCKET_PATH,
     registry,
     () => profiles.contextForFocused(),
     undefined,
-    focusFeed
+    focusFeed,
+    (record) => {
+      const entry = { ...record, at: Date.now() }
+      lastCommand.record(entry)
+      appendFile(commandLogPath, `${formatCommandEntry(entry)}\n`).catch(() => {})
+    }
   )
   console.log(`[mira] control socket listening on ${SOCKET_PATH}`)
 

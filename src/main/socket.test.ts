@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { handleRequestLine } from './socket'
+import { handleRequestLine, MISSING_CLIENT_ERROR, parseClient, requestIdentity } from './socket'
 import { createCommandRegistry, parseTraceParams, type CommandContext } from './commands'
 
 function setup(): {
@@ -378,7 +378,7 @@ describe('handleRequestLine', () => {
   it('dispatches a valid navigate request to the registry', () => {
     const { registry, ctx, loaded } = setup()
     const res = handleRequestLine(
-      '{"command":"navigate","params":{"url":"example.com"}}',
+      '{"client":"test","command":"navigate","params":{"url":"example.com"}}',
       registry,
       ctx
     )
@@ -389,7 +389,7 @@ describe('handleRequestLine', () => {
   it('accepts "cmd" as an alias for "command"', () => {
     const { registry, ctx, loaded } = setup()
     const res = handleRequestLine(
-      '{"cmd":"navigate","params":{"url":"example.com"}}',
+      '{"client":"test","cmd":"navigate","params":{"url":"example.com"}}',
       registry,
       ctx
     )
@@ -399,7 +399,9 @@ describe('handleRequestLine', () => {
 
   it('prefers "command" over "cmd" when both are present', () => {
     const { registry, ctx } = setup()
-    expect(handleRequestLine('{"command":"fly","cmd":"navigate"}', registry, ctx)).toEqual({
+    expect(
+      handleRequestLine('{"client":"test","command":"fly","cmd":"navigate"}', registry, ctx)
+    ).toEqual({
       ok: false,
       error: 'Unknown command: fly'
     })
@@ -423,7 +425,7 @@ describe('handleRequestLine', () => {
 
   it('turns an unknown command into an error response instead of throwing', () => {
     const { registry, ctx } = setup()
-    expect(handleRequestLine('{"command":"fly"}', registry, ctx)).toEqual({
+    expect(handleRequestLine('{"client":"test","command":"fly"}', registry, ctx)).toEqual({
       ok: false,
       error: 'Unknown command: fly'
     })
@@ -432,7 +434,7 @@ describe('handleRequestLine', () => {
   it('resolves an async command (the socket loop awaits the promise)', async () => {
     const { registry, ctx } = setup()
     const res = await handleRequestLine(
-      '{"command":"load-extension","params":{"path":"/ext/dark-reader"}}',
+      '{"client":"test","command":"load-extension","params":{"path":"/ext/dark-reader"}}',
       registry,
       ctx
     )
@@ -446,5 +448,40 @@ describe('handleRequestLine', () => {
         enabled: true
       }
     })
+  })
+})
+
+describe('mandatory client', () => {
+  it('refuses a command that does not say who sends it', () => {
+    const { registry, ctx, loaded } = setup()
+    const res = handleRequestLine(
+      '{"command":"navigate","params":{"url":"example.com"}}',
+      registry,
+      ctx
+    )
+    expect(res).toEqual({ ok: false, error: MISSING_CLIENT_ERROR })
+    expect(loaded).toEqual([])
+  })
+
+  it('refuses a blank or non-string client', () => {
+    const { registry, ctx } = setup()
+    for (const client of ['""', '"   "', '42', 'null']) {
+      expect(handleRequestLine(`{"client":${client},"command":"fly"}`, registry, ctx)).toEqual({
+        ok: false,
+        error: MISSING_CLIENT_ERROR
+      })
+    }
+  })
+
+  it('parseClient trims and caps the name', () => {
+    expect(parseClient('  mira-cli  ')).toBe('mira-cli')
+    expect(parseClient('x'.repeat(500))).toHaveLength(200)
+    expect(parseClient(undefined)).toBeNull()
+  })
+
+  it('requestIdentity reads client and command, even from a refused line', () => {
+    expect(requestIdentity('{"client":"a","cmd":"ping"}')).toEqual({ client: 'a', command: 'ping' })
+    expect(requestIdentity('{"command":"ping"}')).toEqual({ client: null, command: 'ping' })
+    expect(requestIdentity('{not json')).toEqual({ client: null, command: null })
   })
 })

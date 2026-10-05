@@ -38,7 +38,7 @@ Sous le CLI il y a toujours le socket brut. **Ne PAS le piloter avec `printf …
 import socket, json
 def call(obj, timeout=30):
     s=socket.socket(socket.AF_UNIX, socket.SOCK_STREAM); s.settimeout(timeout); s.connect('/tmp/mira.sock')
-    s.sendall((json.dumps(obj)+'\n').encode()); buf=b''
+    s.sendall((json.dumps({'client': 'mira.py session=' + __import__('os').environ.get('CLAUDE_CODE_SESSION_ID', '-'), **obj})+'\n').encode()); buf=b''
     while b'\n' not in buf:
         c=s.recv(65536)
         if not c: break
@@ -51,7 +51,8 @@ Dépannage rapide en shell si vraiment besoin de `nc` : garder stdin ouvert le t
 ## Forme des requêtes socket (pièges vécus)
 
 - **Champ `"command"`, pas `"cmd"`.** Le socket Kova utilise `{"cmd":…}` ; Mira attend `{"command":…}`. Un `"cmd"` renvoie `missing "command" field`.
-- **Les params sont nichés sous `"params"`, jamais à plat.** `{"command":"install-extension","id":"…"}` échoue avec `"id" must be a non-empty string`. Forme correcte : `{"command":"install-extension","params":{"id":"…"}}`. Exemple complet : `{"command":"navigate","params":{"url":"example.com"}}`.
+- **Champ `"client"` obligatoire** (qui appelle : `"mira.py session=<id>"`, un nom de script). Sans lui : `missing "client" field`. Il finit dans `<userData>/command.log`, et `activation.log` le cite quand Mira passe devant. Le CLI `mira` le remplit tout seul.
+- **Les params sont nichés sous `"params"`, jamais à plat.** `{"command":"install-extension","id":"…"}` échoue avec `"id" must be a non-empty string`. Forme correcte : `{"command":"install-extension","params":{"id":"…"}}`. Exemple complet : `{"client":"my-script","command":"navigate","params":{"url":"example.com"}}`.
 
 ## exec-js et onglets de test
 

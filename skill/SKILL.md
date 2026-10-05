@@ -30,6 +30,11 @@ The CLI is the repo's `bin/mira`, to put on the PATH as `mira`. It runs without 
 drive the socket with `nc -U`**: macOS `nc` closes on stdin EOF and misses the asynchronous reply
 (`exec-js` returns zero bytes, which looks like a false "empty").
 
+**Every socket request must name its caller** (`"client"`), or Mira refuses it. The CLI fills it
+by itself (`mira-cli session=<CLAUDE_CODE_SESSION_ID> cwd=<dir>`, prefixed by `$MIRA_CLIENT`
+when set); a raw client writes it. Mira logs each request with that name in
+`<userData>/command.log`, and `activation.log` quotes the last one whenever Mira comes to the front.
+
 **`mira help` prints the full, current usage** — it rereads its own file header, with no side
 effect and no process launched. It is the living source; what follows is only the common path.
 

@@ -19,7 +19,9 @@ import { connect } from 'net'
 
 /** The socket line that hands one queued url to a running Mira. */
 export function forwardRequest(url: string): string {
-  return JSON.stringify({ command: 'open-url', params: { url } })
+  // Named like every socket caller (socket.ts): command.log then tells a link
+  // opened from another app apart from a script.
+  return JSON.stringify({ client: 'mira-second-instance', command: 'open-url', params: { url } })
 }
 
 /**

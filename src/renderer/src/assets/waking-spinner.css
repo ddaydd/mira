@@ -1,0 +1,29 @@
+/* Page-area spinner shown while the active tab wakes (features/loading/
+   WakingSpinner). Main hides the tab's native view until its first paint, so
+   this sits in the body region the view will cover. Reuses the toolbar
+   spinner's glyph and rotation. */
+
+.waking-host {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-background);
+}
+
+.waking-spinner {
+  display: inline-flex;
+  color: var(--accent);
+  transform: scale(2);
+}
+
+.waking-spinner svg {
+  animation: reload-spinner-rot 0.7s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .waking-spinner svg {
+    animation-duration: 1.4s;
+  }
+}

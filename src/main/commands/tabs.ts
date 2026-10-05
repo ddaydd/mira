@@ -63,6 +63,10 @@ export interface TabInfo {
    * persisted: the toolbar shows a spinner beside the address bar while true.
    * Always false for an asleep tab (no view to be loading). */
   loading: boolean
+  /** Whether the tab was just woken (its view created) and has not painted yet.
+   * Its view stays hidden meanwhile and the chrome shows a spinner in the page
+   * area. A live runtime flag, not persisted; absent reads as false. */
+  waking?: boolean
 }
 
 /** Tabs capability slice: create / close / select / list tabs of the target

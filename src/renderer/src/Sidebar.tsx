@@ -34,6 +34,9 @@ export interface TabInfo {
   /** Whether the tab's main frame is currently loading. Live runtime flag, not
    * persisted; drives the toolbar reload spinner. */
   loading: boolean
+  /** Just woken, not painted yet: main hides its view and the page area shows
+   * a spinner (features/loading/WakingSpinner). */
+  waking?: boolean
 }
 
 /** The speaker icon shown on a tab that is emitting sound. A monochrome inline

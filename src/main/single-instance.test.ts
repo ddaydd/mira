@@ -8,6 +8,7 @@ import { forwardRequest, forwardToRunningInstance } from './single-instance'
 describe('forwardRequest', () => {
   it('builds an open-url command line for a queued url', () => {
     expect(JSON.parse(forwardRequest('file:///tmp/x.html'))).toEqual({
+      client: 'mira-second-instance',
       command: 'open-url',
       params: { url: 'file:///tmp/x.html' }
     })
@@ -74,8 +75,16 @@ describe('forwardToRunningInstance', () => {
 
     expect(accepted).toBe(true)
     expect(received.map((l) => JSON.parse(l))).toEqual([
-      { command: 'open-url', params: { url: 'file:///tmp/a.html' } },
-      { command: 'open-url', params: { url: 'https://example.com' } }
+      {
+        client: 'mira-second-instance',
+        command: 'open-url',
+        params: { url: 'file:///tmp/a.html' }
+      },
+      {
+        client: 'mira-second-instance',
+        command: 'open-url',
+        params: { url: 'https://example.com' }
+      }
     ])
   })
 

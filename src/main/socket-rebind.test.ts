@@ -23,7 +23,7 @@ function request(socketPath: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const conn = connect(socketPath)
     let buf = ''
-    conn.on('connect', () => conn.write('{"command":"ping"}\n'))
+    conn.on('connect', () => conn.write('{"client":"test","command":"ping"}\n'))
     conn.on('data', (chunk) => {
       buf += chunk.toString()
       if (buf.includes('\n')) {

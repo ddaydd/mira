@@ -25,8 +25,10 @@ import {
   TAB_BOUND,
   resolveTimeoutMs,
   background,
-  resolveNavTarget
-  // @ts-expect-error — plain-ESM sibling module, no .d.ts (the CLI ships without a build),
+  resolveNavTarget,
+  clientName,
+  withClient
+  // @ts-expect-error — plain-ESM sibling module, no .d.ts (the CLI ships without a build)
 } from './mira-core.mjs'
 
 describe('parseArgs', () => {
@@ -702,5 +704,30 @@ describe('sessionTabsTarget', () => {
 
   it('--session is a boolean flag: it never swallows the next word', () => {
     expect(parseArgs(['tabs', '--session', '--json']).flags).toEqual({ session: true, json: true })
+  })
+})
+
+describe('clientName', () => {
+  it('names the CLI, the Claude session and the directory', () => {
+    expect(clientName({ CLAUDE_CODE_SESSION_ID: 'abc' }, '/Users/me/p')).toBe(
+      'mira-cli session=abc cwd=/Users/me/p'
+    )
+  })
+
+  it('puts $MIRA_CLIENT first and skips a missing session', () => {
+    expect(clientName({ MIRA_CLIENT: ' track ' }, '/x')).toBe('track mira-cli cwd=/x')
+  })
+})
+
+describe('withClient', () => {
+  it('stamps a request that has none', () => {
+    expect(withClient({ command: 'ping' }, 'me')).toEqual({ client: 'me', command: 'ping' })
+  })
+
+  it('keeps a client the request already carries', () => {
+    expect(withClient({ client: 'other', command: 'ping' }, 'me')).toEqual({
+      client: 'other',
+      command: 'ping'
+    })
   })
 })

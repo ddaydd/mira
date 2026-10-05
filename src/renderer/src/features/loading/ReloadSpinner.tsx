@@ -45,7 +45,7 @@ function useReloadSpinner(loading: boolean): boolean {
 }
 
 /** The spinning arc, monochrome (currentColor) to match Mira's glyph chrome. */
-function SpinnerGlyph(): React.JSX.Element {
+export function SpinnerGlyph(): React.JSX.Element {
   return (
     <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
       <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.6" opacity="0.25" />

@@ -35,14 +35,31 @@ export function inputReadiness(opts: {
 }
 
 /** Whether a tab's view is shown by layout: the active tab, or an underlaid one
- * while the active tab's view covers it. Never while a chrome overlay is open. */
+ * while the active tab's view covers it. Never while a chrome overlay is open.
+ *
+ * A waking tab (just materialized, nothing painted yet) stays hidden: its view
+ * draws nothing until the page's first paint, so showing it would let whatever
+ * sits beneath show through. The chrome draws a spinner in its place, and since
+ * it covers nothing yet, `activeHasView` must be false for the others then. */
 export function viewShown(opts: {
   isActive: boolean
   underlaid: boolean
   activeHasView: boolean
   overlayOpen: boolean
+  waking?: boolean
 }): boolean {
-  if (opts.overlayOpen) return false
+  if (opts.overlayOpen || opts.waking) return false
   if (opts.isActive) return true
   return opts.underlaid && opts.activeHasView
+}
+
+/** Whether the underlays still hold after a layout. They were made to sit under
+ * ONE active tab; once the user selects another, they go. Kept forever, an
+ * underlaid page showed through any view that had not painted yet — a woken tab
+ * displayed some other tab's page until its own first paint. */
+export function underlaysSurvive(
+  madeUnderActiveId: string | null,
+  activeId: string | null
+): boolean {
+  return madeUnderActiveId !== null && madeUnderActiveId === activeId
 }

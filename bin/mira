@@ -19,6 +19,10 @@
 // on `mira done` or when the session's process exits. MIRA_NO_SESSION_WINDOW=1
 // turns this off.
 //
+// Every request carries a `client` (Mira refuses one without, see docs/socket.md):
+// `mira-cli session=<CLAUDE_CODE_SESSION_ID> cwd=<dir>`, prefixed by $MIRA_CLIENT
+// when set. Mira writes it to <userData>/command.log next to each command.
+//
 // Usage:
 //   mira tabs [--window <id>]       list tabs (id / title / url), * = active, z = asleep, ♪ = playing sound
 //                                   (--window: any window from `mira windows`, else the focused one)
@@ -72,6 +76,8 @@ import { homedir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
 import {
+  clientName,
+  withClient,
   parseArgs,
   resolveTabId,
   sessionTarget,
@@ -109,6 +115,9 @@ import {
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 
+/** Who this CLI run is, sent with every request (Mira refuses one without). */
+const CLIENT = clientName(process.env, process.cwd())
+
 /** Send one request object, resolve with the parsed JSON reply. Reads until the
  * first newline (the server appends one per response). */
 function call(request, socketPath, timeoutMs = 30000) {
@@ -116,7 +125,7 @@ function call(request, socketPath, timeoutMs = 30000) {
     const conn = createConnection(socketPath)
     let buf = ''
     conn.setTimeout(timeoutMs)
-    conn.on('connect', () => conn.write(JSON.stringify(request) + '\n'))
+    conn.on('connect', () => conn.write(JSON.stringify(withClient(request, CLIENT)) + '\n'))
     conn.on('data', (chunk) => {
       buf += chunk.toString()
       const nl = buf.indexOf('\n')
@@ -198,7 +207,7 @@ function openSession(socketPath, timeoutMs = 30000) {
         ask: (request) =>
           new Promise((res, rej) => {
             pending.push({ resolve: res, reject: rej })
-            conn.write(JSON.stringify(request) + '\n')
+            conn.write(JSON.stringify(withClient(request, CLIENT)) + '\n')
           }),
         close: () => conn.end()
       })
@@ -213,7 +222,9 @@ function watch(socketPath, { json }) {
   return new Promise((_resolveP, reject) => {
     const conn = createConnection(socketPath)
     let buf = ''
-    conn.on('connect', () => conn.write('{"cmd":"subscribe","events":["focus"]}\n'))
+    conn.on('connect', () =>
+      conn.write(JSON.stringify({ client: CLIENT, cmd: 'subscribe', events: ['focus'] }) + '\n')
+    )
     conn.on('data', (chunk) => {
       buf += chunk.toString()
       let nl
@@ -413,8 +424,8 @@ async function main() {
         if ('error' in st) return die(st.error, 2)
         const params = { sessionId: st.sessionId }
         if (st.profileFlag) {
-          const profs = await call({ command: 'list-profiles' }, socketPath, timeoutMs).catch(
-            (e) => die(e.message, 2)
+          const profs = await call({ command: 'list-profiles' }, socketPath, timeoutMs).catch((e) =>
+            die(e.message, 2)
           )
           if (!profs.ok) return die(JSON.stringify(profs), 1)
           const match = matchProfileId(profs.profiles, st.profileFlag)
@@ -488,7 +499,10 @@ async function main() {
         value: flags.value
       })
       if ('error' in built) return die(built.error, 2)
-      return send(built.request, { json, pretty: (r) => `selected ${JSON.stringify(r.label)} in ${r.target}` })
+      return send(built.request, {
+        json,
+        pretty: (r) => `selected ${JSON.stringify(r.label)} in ${r.target}`
+      })
     }
 
     case 'wait': {

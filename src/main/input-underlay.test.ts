@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { inputReadiness, viewShown } from './input-underlay'
+import { inputReadiness, underlaysSurvive, viewShown } from './input-underlay'
 
 describe('inputReadiness', () => {
   it('leaves the active tab alone', () => {
@@ -43,5 +43,26 @@ describe('viewShown', () => {
   it('hides everything while a chrome overlay is open', () => {
     expect(viewShown({ ...base, isActive: true, overlayOpen: true })).toBe(false)
     expect(viewShown({ ...base, underlaid: true, overlayOpen: true })).toBe(false)
+  })
+})
+
+describe('viewShown while waking', () => {
+  const base = { isActive: true, underlaid: false, activeHasView: true, overlayOpen: false }
+
+  it('hides an active tab that has not painted yet', () => {
+    expect(viewShown({ ...base, waking: true })).toBe(false)
+    expect(viewShown({ ...base, waking: false })).toBe(true)
+  })
+})
+
+describe('underlaysSurvive', () => {
+  it('keeps underlays while the same tab stays active', () => {
+    expect(underlaysSurvive('a', 'a')).toBe(true)
+  })
+
+  it('drops them once another tab is selected', () => {
+    expect(underlaysSurvive('a', 'b')).toBe(false)
+    expect(underlaysSurvive('a', null)).toBe(false)
+    expect(underlaysSurvive(null, 'a')).toBe(false)
   })
 })

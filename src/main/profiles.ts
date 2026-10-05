@@ -94,6 +94,7 @@ import {
 } from './download-doc'
 import { observeActivations, setActivationSuppressed } from './mac-activation'
 import { formatActivationEntry } from './activation-trace'
+import { lastCommand } from './command-log'
 import { formatVersion, type Outcome, type UpdateChecker } from './update-check'
 import { createUpdateChecker, presentInDialog, startUpdateSchedule } from './update-service'
 import { answersInDialog } from './update-dialog'
@@ -260,7 +261,7 @@ import {
   type InputKind
 } from './input-delivery'
 import { SessionWindowRegistry, firstUserWindow, sessionWindowProfile } from './session-windows'
-import { inputReadiness, viewShown } from './input-underlay'
+import { inputReadiness, underlaysSurvive, viewShown } from './input-underlay'
 import { locationAuthStatus, requestLocationAuthorization } from './mac-location'
 import { extractionScript, type SkillSource } from './skills'
 import { allowQuitNow, suppressQuitPrompt } from './quit'
@@ -413,8 +414,12 @@ interface ProfileWindow {
   closeArmedId: string | null
   /** Background tabs whose view is shown UNDER the active one so scripted input
    * reaches them without selecting them (input-underlay.ts). A tab leaves the
-   * set when it becomes active (layout). */
+   * set when it becomes active (layout), and the whole set is dropped once the
+   * user selects another tab (underlayActiveId). */
   inputUnderlay: Set<string>
+  /** The active tab the underlays were made under. When the active tab changes,
+   * layout drops every underlay (underlaysSurvive). */
+  underlayActiveId: string | null
   /** Which surface of this window last held the keyboard: its chrome (address
    * bar, palette, settings) or the active tab's page. Fed by the 'focus' event of
    * each webContents, and re-applied when the window itself is focused — Electron
@@ -592,6 +597,9 @@ export interface ProfileManagerDeps {
   runCommand?: (wc: WebContents, name: string, params?: unknown) => void
 }
 
+/** Longest a woken tab stays hidden behind the chrome spinner (trackWaking). */
+const WAKING_MAX_MS = 10_000
+
 export class ProfileManager {
   /** How long to coalesce disk writes / strip pushes / resize layouts. Page
    * events (title, favicon, in-page navigation) fire in bursts; batching them
@@ -685,6 +693,11 @@ export class ProfileManager {
    * debugger. Read back by the get-console command; dropped when a tab is torn
    * down. See page-console.ts. */
   private readonly pageConsole = new PageConsoleStore()
+  /** Tabs whose view was just created and has not painted yet. layout keeps
+   * their view hidden (an unpainted view shows what is beneath it) and the chrome
+   * draws a spinner in the page area instead (TabInfo.waking). Tab ids are unique
+   * across windows, so a torn-off tab keeps its entry. */
+  private readonly wakingTabs = new Set<string>()
   /** Windows currently being closed programmatically by closeProfile (socket/MCP
    * `close-profile`), NOT by a user. A script closing the last profile must not
    * quit the whole app — only a real user close does. Agents wanting to quit call
@@ -789,7 +802,9 @@ export class ProfileManager {
       const context = [
         `armed=${this.activationSuppressTimer !== null}`,
         `focusedWindow=${focused ? 'yes' : 'no'}`,
-        `windows=${BrowserWindow.getAllWindows().length}`
+        `windows=${BrowserWindow.getAllWindows().length}`,
+        // Who was driving Mira from outside just before (command.log has the rest).
+        lastCommand.describe()
       ].join(' ')
       appendFile(logPath, `${formatActivationEntry({ ...event, context })}\n`).catch(() => {})
     })
@@ -1708,6 +1723,7 @@ export class ProfileManager {
       settingsTabId: null,
       closeArmedId: null,
       inputUnderlay: new Set(),
+      underlayActiveId: null,
       focusTarget: 'page',
       closedTabs: [],
       mru: emptyMru(),
@@ -1757,7 +1773,11 @@ export class ProfileManager {
     // A window born of a scripted command must not take the keyboard NOR cover
     // what the user is looking at (foreground-policy.ts): it is ordered in below
     // the frontmost window, showInactive being only the fallback (window-order.ts).
-    window.on('ready-to-show', () => (opts.inactive ? this.showBehind(window) : window.show()))
+    // `once`, not `on`: Electron relays `ready-to-show` from EVERY webContents the
+    // window owns (lib/browser/api/web-contents.ts), tabs included, so each page
+    // load in any tab re-ran window.show() — an activateIgnoringOtherApps that
+    // pulled Mira in front of the user (activation.log, 2026-10-05).
+    window.once('ready-to-show', () => (opts.inactive ? this.showBehind(window) : window.show()))
     // Track focus so the menu's active-profile checkmark stays in sync — but only
     // rebuild when focus moves to a DIFFERENT profile (skip plain re-focus).
     // Leaving Mira (for Kova, Slack, anything) is as much a fact for a focus
@@ -2108,6 +2128,7 @@ export class ProfileManager {
     pw.views.set(tab.id, view)
 
     this.wireView(pw, tab.id, view.webContents)
+    this.trackWaking(tab.id, view.webContents)
     // Start the continuous media capture on this tab's own CDP debugger (stealth
     // already attached one at web-contents-created). Feeds the per-tab buffer the
     // media gallery reads. Metadata only — no bodies held.
@@ -3078,8 +3099,44 @@ export class ProfileManager {
 
   /** Position the active view below the toolbar, offset right by the tab panel
    * when it is shown, and hide every inactive view. */
+  /** Mark a freshly materialized tab as waking until its page has something to
+   * show: dom-ready (first paint is close behind), a failed or stopped load (the
+   * error page or a blank one), or the renderer gone. A ceiling keeps a page
+   * that never gets there from staying hidden behind the spinner. */
+  private trackWaking(tabId: string, wc: WebContents): void {
+    this.wakingTabs.add(tabId)
+    let timer: ReturnType<typeof setTimeout> | null = null
+    const done = (): void => {
+      if (timer) clearTimeout(timer)
+      timer = null
+      if (!this.wakingTabs.delete(tabId)) return
+      if (!wc.isDestroyed()) {
+        wc.off('dom-ready', done)
+        wc.off('did-stop-loading', done)
+        wc.off('did-fail-load', done)
+        wc.off('render-process-gone', done)
+      }
+      const pw = this.ownerOf(tabId)
+      if (!pw) return
+      this.layout(pw)
+      this.schedulePush(pw)
+    }
+    wc.once('dom-ready', done)
+    wc.once('did-stop-loading', done)
+    wc.once('did-fail-load', done)
+    wc.once('render-process-gone', done)
+    wc.once('destroyed', done)
+    timer = setTimeout(done, WAKING_MAX_MS)
+  }
+
   private layout(pw: ProfileWindow): void {
     if (pw.window.isDestroyed()) return
+    // Underlays belong to the active tab they were made under: a tab switch
+    // drops them all (underlaysSurvive).
+    if (pw.inputUnderlay.size > 0 && !underlaysSurvive(pw.underlayActiveId, pw.state.activeId)) {
+      pw.inputUnderlay.clear()
+      pw.underlayActiveId = null
+    }
     const { width, height } = pw.window.getContentBounds()
     // Panel widths are live (resizable): read the current settings, not the
     // startup deps, so a drag repositions the web view immediately.
@@ -3121,8 +3178,9 @@ export class ProfileManager {
       const shown = viewShown({
         isActive: id === pw.state.activeId,
         underlaid,
-        activeHasView: !!pw.state.activeId && pw.views.has(pw.state.activeId),
-        overlayOpen
+        activeHasView: this.activeHasPaintedView(pw),
+        overlayOpen,
+        waking: this.wakingTabs.has(id)
       })
       view.setVisible(shown)
       // An underlaid tab keeps the plain page bounds: it sits under the active
@@ -3224,6 +3282,13 @@ export class ProfileManager {
    * the whole browser down. Vérifié le 2026-08-24 16:43 : crash de Mira sur cette
    * ligne exacte (`isCurrentlyAudible`), 2.7 s après un webContents détruit par un
    * flux OAuth. Every live read of a view's webContents goes through here. */
+  /** The active tab is drawn by a native view that has painted: something
+   * opaque sits on top, so an underlay beneath it stays invisible. */
+  private activeHasPaintedView(pw: ProfileWindow): boolean {
+    const activeId = pw.state.activeId
+    return !!activeId && pw.views.has(activeId) && !this.wakingTabs.has(activeId)
+  }
+
   private liveContents(pw: ProfileWindow, tabId: string): WebContents | null {
     const wc = pw.views.get(tabId)?.webContents
     return isLiveContents(wc) ? wc : null
@@ -3251,7 +3316,8 @@ export class ProfileManager {
       // Live loading state, same source: true while the main frame is fetching a
       // page. Drives the toolbar reload spinner. An asleep tab has no view, so it
       // is never loading. Refreshed by the did-start/did-stop-loading push.
-      loading: this.liveContents(pw, t.id)?.isLoadingMainFrame() === true
+      loading: this.liveContents(pw, t.id)?.isLoadingMainFrame() === true,
+      waking: this.wakingTabs.has(t.id)
     }))
   }
 
@@ -3998,7 +4064,7 @@ export class ProfileManager {
       const view = pw.views.get(id)
       const readiness = inputReadiness({
         isActive: pw.state.activeId === id,
-        activeHasView: !!view && !!pw.state.activeId && pw.views.has(pw.state.activeId),
+        activeHasView: !!view && this.activeHasPaintedView(pw),
         overlayOpen
       })
       let switched = false
@@ -4006,6 +4072,7 @@ export class ProfileManager {
         switched = !pw.inputUnderlay.has(id)
         if (switched) {
           pw.inputUnderlay.add(id)
+          pw.underlayActiveId = pw.state.activeId
           // Bottom of the z-order: every other view stays above it.
           pw.window.contentView.addChildView(view, 0)
           this.layout(pw)
@@ -4649,6 +4716,13 @@ export class ProfileManager {
         event.preventDefault()
       } else if (input.alt && input.key === 'ArrowRight') {
         this.stepMruIn(pw, 1)
+        event.preventDefault()
+      }
+      // Cmd+Shift+H: zen mode. Taken here, before the page, because sites bind it
+      // themselves (Notion: "apply last highlight color") and swallow it, so the
+      // menu accelerator never fired on them.
+      else if (input.shift && !input.alt && input.key.toLowerCase() === 'h') {
+        this.toggleZenIn(pw)
         event.preventDefault()
       }
     })

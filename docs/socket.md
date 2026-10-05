@@ -33,15 +33,23 @@ Pure logic + tests: `src/cli/mira-core.mjs`. The raw protocol below still underl
 - One JSON request per line; one JSON response per line.
 
 ```bash
-printf '%s\n' '{"command":"navigate","params":{"url":"example.com"}}' | nc -U /tmp/mira.sock
+printf '%s\n' '{"client":"my-script","command":"navigate","params":{"url":"example.com"}}' | nc -U /tmp/mira.sock
 # {"ok":true,"url":"https://example.com"}
 ```
 
-- Request: `{"command":"<name>","params":{...}}` (`params` optional). `cmd` is a
+- Request: `{"client":"<who>","command":"<name>","params":{...}}` (`params` optional).
+- **`client` is mandatory** on every command: a request without it is refused with
+  `missing "client" field`. It names the caller (a script, an agent session) and is
+  written next to the command in `<userData>/command.log` (`time | OK/FAIL | client |
+  command [| error]`). `activation.log` adds the last socket command, its client and
+  how long before, to every attempt to bring Mira to the front, so "who pulled Mira
+  in front" is read from two files instead of guessed. `bin/mira` fills it by itself
+  (`mira-cli session=<CLAUDE_CODE_SESSION_ID> cwd=<dir>`, prefixed by `$MIRA_CLIENT`
+  when set). A `subscribe` request does not need it: a stream never acts on Mira. `cmd` is a
   tolerated alias for `command` (Kova's socket uses `cmd`, so requests copy-paste
   across both); `command` stays the canonical form and wins if both are present.
 - Response: `{"ok":true, ...result}` or `{"ok":false,"error":"..."}`.
-- **Discovery**: `{"command":"list-commands"}` returns every command name the running
+- **Discovery**: `{"client":"<who>","command":"list-commands"}` returns every command name the running
   build knows — always trust it over this doc if they disagree (this doc can lag).
 
 ## Foreground: a socket command never steals your screen

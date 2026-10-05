@@ -4,7 +4,7 @@
 // pilotable"). The MCP server, when it comes, is a thin wrapper over this.
 //
 // Protocol (mirrors Kova):
-//   request:  {"command":"navigate","params":{"url":"example.com"}}\n
+//   request:  {"client":"mira-cli","command":"navigate","params":{"url":"example.com"}}\n
 //   response: {"ok":true,"url":"https://example.com"}\n
 //             {"ok":false,"error":"..."}\n
 
@@ -47,6 +47,37 @@ export function parseSubscribe(line: string): string[] | null {
   return events.filter((e): e is string => typeof e === 'string')
 }
 
+/** The error a request without a `client` gets. It says how to fix it, because
+ * the caller reading it is usually a script or an agent, not a person. */
+export const MISSING_CLIENT_ERROR =
+  'missing "client" field: name who is calling, e.g. {"client":"my-script","command":"ping"}'
+
+/** Cap on a client name, so a runaway caller cannot bloat command.log. */
+const CLIENT_MAX = 200
+
+/** Who sent a request, as the request itself says. Every command must carry one:
+ * when Mira does something nobody expected (comes to the front, opens a tab),
+ * command.log has to name the caller instead of leaving it to guesswork.
+ * Returns null when absent, not a string, or blank. */
+export function parseClient(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null
+  const client = raw.trim()
+  return client === '' ? null : client.slice(0, CLIENT_MAX)
+}
+
+/** What a request line claims to be, for the command log: read on its own so
+ * a rejected request (bad JSON, no client) is logged as well as an accepted one.
+ * Never throws. */
+export function requestIdentity(line: string): { client: string | null; command: string | null } {
+  try {
+    const msg = (JSON.parse(line) ?? {}) as { client?: unknown; command?: unknown; cmd?: unknown }
+    const name = typeof msg.command === 'string' ? msg.command : msg.cmd
+    return { client: parseClient(msg.client), command: typeof name === 'string' ? name : null }
+  } catch {
+    return { client: null, command: null }
+  }
+}
+
 /**
  * Parse one request line and dispatch it to the registry with the given context
  * (the target window). Pure (no socket I/O), so it is unit-testable. Returns the
@@ -67,14 +98,18 @@ export function handleRequestLine(
 
   // `cmd` is a tolerated alias for `command` — Kova's sibling socket uses `cmd`,
   // so copy-pasted requests work across both. `command` stays the canonical form.
-  const { command, cmd, params } = (msg ?? {}) as {
+  const { command, cmd, params, client } = (msg ?? {}) as {
     command?: unknown
     cmd?: unknown
     params?: unknown
+    client?: unknown
   }
   const name = typeof command === 'string' ? command : cmd
   if (typeof name !== 'string') {
     return { ok: false, error: 'missing "command" field' }
+  }
+  if (!parseClient(client)) {
+    return { ok: false, error: MISSING_CLIENT_ERROR }
   }
 
   try {
@@ -82,6 +117,14 @@ export function handleRequestLine(
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : String(error) }
   }
+}
+
+/** One request as the socket saw it, handed to `onCommand` after the reply. */
+export interface SocketCommandRecord {
+  client: string | null
+  command: string | null
+  ok: boolean
+  error?: string
 }
 
 /** Handle on the running control socket. `server` always resolves to the LIVE
@@ -113,7 +156,8 @@ export function startCommandSocket(
   registry: CommandRegistry,
   makeContext: () => CommandContext,
   rebindCheckMs = 5000,
-  focusFeed?: FocusFeed
+  focusFeed?: FocusFeed,
+  onCommand?: (record: SocketCommandRecord) => void
 ): CommandSocketHandle {
   const handleConnection = (conn: Socket): void => {
     let buffer = ''
@@ -153,6 +197,15 @@ export function startCommandSocket(
           response = { ok: false, error: error instanceof Error ? error.message : String(error) }
         }
         conn.write(JSON.stringify(response) + '\n')
+        if (onCommand) {
+          const { client, command } = requestIdentity(trimmed)
+          const error = response.ok ? undefined : (response as { error?: string }).error
+          try {
+            onCommand({ client, command, ok: response.ok, error })
+          } catch {
+            // Logging must never break the reply loop.
+          }
+        }
       })
     }
 

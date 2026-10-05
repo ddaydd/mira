@@ -122,7 +122,7 @@ describe('subscribe over the socket', () => {
     const feed = new FocusFeed()
     const { lines, ready } = subscribed(feed)
     await ready
-    client?.write('{"command":"ping"}\n')
+    client?.write('{"client":"test","command":"ping"}\n')
     await waitFor(() => lines.length === 2)
     expect(lines[1]).toEqual({ ok: true, pong: true })
   })

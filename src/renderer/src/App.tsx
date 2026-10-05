@@ -9,6 +9,7 @@ import ExtensionActions from './features/extensions/ExtensionActions'
 import FindBar from './features/find/FindBar'
 import MediaGallery from './features/media/MediaGallery'
 import { ReloadSpinner } from './features/loading/ReloadSpinner'
+import { WakingSpinner } from './features/loading/WakingSpinner'
 import { useRevealTab } from './features/reveal-tab/useRevealTab'
 import { applyTheme, initialTheme } from './features/profile-theme/profile-theme'
 import type { SkillPaneState, TabFolder } from '../../preload/index.d'
@@ -393,6 +394,9 @@ function App(): React.JSX.Element {
   const settingsSection = settingsTab?.url.split('/')[3]
   // Live loading state of the active tab, driving the toolbar reload spinner.
   const activeLoading = tabs.some((t) => t.id === activeId && t.loading)
+  // The active tab was just woken and has not painted: main keeps its view
+  // hidden, so the body shows a spinner in its place.
+  const activeWaking = tabs.some((t) => t.id === activeId && t.waking === true)
 
   // The star reflects whether the ACTIVE tab's real url (not the edited bar text)
   // is already a favorite. Empty when there is no active tab → the star disables.
@@ -640,6 +644,7 @@ function App(): React.JSX.Element {
             <Settings section={settingsSection} />
           </div>
         )}
+        {activeWaking && !settingsActive && <WakingSpinner />}
       </div>
       {!chromeHidden && <StatusBar />}
       {/* Mounted only while open, so its search/selection state starts fresh each
