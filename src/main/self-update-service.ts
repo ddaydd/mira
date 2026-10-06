@@ -1,4 +1,4 @@
-// Self-update for the published (unsigned) macOS build: the Electron / disk /
+// Self-update for the published macOS build: the Electron / disk /
 // process half. The decisions and the swap script are pure and tested in
 // self-update.ts; read its header first.
 //
@@ -33,12 +33,12 @@ import { formatVersion, type Version } from './update-check'
 import {
   INSTALL_SCRIPT,
   SIGNING_DOC_URL,
-  UNSIGNED_NOTICE,
+  RELEASE_NOTICE,
   bundlePathOf,
   distributionOf,
   isTranslocated,
   parseSha256File,
-  shouldShowUnsignedNotice,
+  shouldShowReleaseNotice,
   updateAssetsFor,
   type Distribution,
   type ReleaseInfo
@@ -202,34 +202,36 @@ export function applyStagedUpdateOnQuit(): void {
   console.log(`[mira] installing Mira ${stagedVersion} into ${target.path} after quit`)
 }
 
+// Named after the notice of the ad-hoc builds it replaced: a user who dismissed
+// that one is not shown this one either.
 function noticeStatePath(): string {
   return join(app.getPath('userData'), 'unsigned-notice.json')
 }
 
-/** At launch of a release build: explain once that it is unsigned and what that
- * costs, until the user ticks "Don't show this again". */
-export async function maybeShowUnsignedNotice(): Promise<void> {
+/** At launch of a release build: explain once what it cannot do, until the user
+ * ticks "Don't show this again". */
+export async function maybeShowReleaseNotice(): Promise<void> {
   let dismissed = false
   try {
     dismissed = JSON.parse(readFileSync(noticeStatePath(), 'utf8')).dismissed === true
   } catch {
     // No state yet: first launch.
   }
-  if (!shouldShowUnsignedNotice(distribution(), dismissed)) return
+  if (!shouldShowReleaseNotice(distribution(), dismissed)) return
   const { response, checkboxChecked } = await dialog.showMessageBox({
     type: 'info',
-    message: UNSIGNED_NOTICE.message,
-    detail: UNSIGNED_NOTICE.detail,
-    buttons: [...UNSIGNED_NOTICE.buttons],
+    message: RELEASE_NOTICE.message,
+    detail: RELEASE_NOTICE.detail,
+    buttons: [...RELEASE_NOTICE.buttons],
     defaultId: 0,
-    checkboxLabel: UNSIGNED_NOTICE.checkbox,
+    checkboxLabel: RELEASE_NOTICE.checkbox,
     checkboxChecked: true
   })
   if (checkboxChecked) {
     try {
       writeFileSync(noticeStatePath(), `${JSON.stringify({ dismissed: true })}\n`)
     } catch (error) {
-      console.error('[mira] unsigned notice: cannot save state', error)
+      console.error('[mira] release notice: cannot save state', error)
     }
   }
   if (response === 1) {

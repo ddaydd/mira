@@ -1,18 +1,19 @@
 # Releases and self-update (macOS)
 
-Mira publishes an **unsigned** macOS build on GitHub Releases, and that build updates itself.
-There is no paid Apple Developer account behind Mira, so the published app is ad-hoc signed; this
-page says what that costs and how to sign your own build.
+Mira publishes a macOS build on GitHub Releases, signed with a Developer ID certificate and
+notarized by Apple, and that build updates itself. Releases up to 1.3.1 were ad-hoc signed
+(no Apple Developer account then): macOS blocked them at first launch. This page says how a
+release is made, what a downloaded build cannot do, and how to sign your own build.
 
 ## Two kinds of build
 
 | | Published build (`bin/release.sh`) | Local build (`bin/build.sh`, `npm run build:mac`) |
 |---|---|---|
-| Signature | ad-hoc | your Apple Development certificate + provisioning profile |
-| Runs on | any Mac, Apple Silicon or Intel, after allowing it once | only the Macs listed in your profile |
+| Signature | Developer ID, hardened runtime, notarized | your Apple Development certificate + provisioning profile |
+| Runs on | any Mac, Apple Silicon or Intel | only the Macs listed in your profile |
 | Touch ID passkeys (WebAuthn) | no | yes |
 | Updates itself | yes | no, rebuild from source |
-| Unsigned notice at launch | yes, until dismissed | no |
+| Notice at launch | "no Touch ID passkeys", until dismissed | no |
 
 The published build carries `"miraDistribution": "release"` in its packaged `package.json`
 (`bin/release-build.cjs`). That stamp alone turns on the notice and the self-update
@@ -24,13 +25,30 @@ The published build carries `"miraDistribution": "release"` in its packaged `pac
 bin/release.sh patch   # or minor / major
 ```
 
-On a clean `master` with `gh` logged in, it: runs the typecheck and the tests, bumps the version
-in `package.json`, then, once per architecture (`arm64` and `x64`, this Mac's last), builds the
-native addons and the app, builds the release app with `bin/release-build.cjs` (electron-builder
-with the owner-only signing stripped out), ad-hoc signs it (`codesign --sign -`), zips it with
-`ditto` and writes `Mira-<version>-mac-<arch>.zip.sha256`. It then commits `release: v<version>`,
-tags, pushes, and creates the GitHub release with the four files and install notes. It publishes:
-run it only when a release is wanted. The per-architecture steps live in `bin/release-app.sh`.
+It needs, on the Mac that publishes:
+
+- a **"Developer ID Application"** certificate with its private key in the login keychain. With
+  exactly one, it is found by itself; otherwise set `MIRA_RELEASE_IDENTITY` to its name without the
+  `Developer ID Application: ` prefix.
+- a **notarytool keychain profile**, `mira-notary` by default (`MIRA_NOTARY_PROFILE` to change it),
+  made once from an App Store Connect API key:
+  `xcrun notarytool store-credentials mira-notary --key AuthKey_<keyid>.p8 --key-id <keyid> --issuer <issuer id>`.
+
+It checks both before touching anything. Then, on a clean `master` with `gh` logged in, it: runs
+the typecheck and the tests, bumps the version in `package.json`, then, once per architecture
+(`arm64` and `x64`, this Mac's last), builds the native addons and the app, builds the release app
+with `bin/release-build.cjs` (electron-builder signing every Mach-O with the Developer ID
+certificate and the hardened runtime, without the local build's provisioning profile), checks the
+signature, sends the app to Apple's notary service and waits for its verdict, staples the ticket,
+zips it with `ditto` and writes `Mira-<version>-mac-<arch>.zip.sha256`. It then commits
+`release: v<version>`, tags, pushes, and creates the GitHub release with the four files and
+install notes. It publishes: run it only when a release is wanted. The per-architecture steps live
+in `bin/release-app.sh`.
+
+The main app gets the helpers' entitlements (`build/entitlements.mac.inherit.plist`): camera,
+microphone, location, and what V8's JIT needs under the hardened runtime. Not the keychain group
+and application identifier of `build/entitlements.mac.plist`, which only validate next to a
+provisioning profile that authorizes them, and the release build embeds none.
 
 Before signing, it refuses to go on if `app.asar` holds anything besides `out/`, `resources/`,
 `node_modules/` and `package.json`. `electron-builder.yml`'s `files` is an allow-list for the same
@@ -48,9 +66,10 @@ scripts), and electron-builder packs the Electron of that architecture (`MIRA_AR
 `SHASUMS256.txt`, because electron-builder's own download once stalled for its full 10-minute
 timeout.
 
-Checked on 2026-10-06, building 1.3.0 for x64 on an Apple Silicon Mac: every Mach-O in the bundle is
-x86_64, the signature passes `codesign --verify --deep --strict`, and the three addons load in the
-x64 Electron under Rosetta. The x64 app itself was not launched on an Intel Mac by that check.
+Checked on 2026-10-06, building 1.3.0 for x64 on an Apple Silicon Mac (ad-hoc signed then): every
+Mach-O in the bundle is x86_64, the signature passes `codesign --verify --deep --strict`, and the
+three addons load in the x64 Electron under Rosetta. The x64 app itself was not launched on an Intel
+Mac by that check.
 
 After a release, `native/*/build` holds the addons of this Mac's architecture (built last), so
 `npm run dev` keeps working.
@@ -70,7 +89,8 @@ After a release, `native/*/build` holds the addons of this Mac's architecture (b
 
 Why not Electron's standard updater: Squirrel.Mac only accepts a new bundle that satisfies the
 running one's designated requirement, and an ad-hoc signature's requirement is its own hash, so no
-two ad-hoc builds ever match.
+two ad-hoc builds ever match. Signed builds would pass it, but the ad-hoc 1.3.1 already in the wild
+must still be able to update to them, so Mira keeps its own updater.
 
 Limits:
 
@@ -82,15 +102,14 @@ Limits:
 - A release published before 1.3.1 carries the Apple Silicon zip only: an Intel Mira finds no
   asset in it, and the update fails with a notification naming the missing zip.
 
-## What an unsigned build cannot do
+## What a downloaded build cannot do
 
 - **Touch ID passkeys (WebAuthn).** Mira stores platform credentials under a keychain access group
   (`src/main/webauthn.ts`). That entitlement is restricted by macOS and only honored on an app whose
-  embedded provisioning profile authorizes it.
-- **Less smooth permissions.** Each ad-hoc build has a different signature, so macOS may treat an
-  update as a new app and ask again for camera, microphone, location or keychain access.
-- **First launch.** macOS blocks a downloaded unsigned app once: allow it in System Settings →
-  Privacy & Security, or run `xattr -dr com.apple.quarantine /Applications/Mira.app`.
+  embedded provisioning profile authorizes it; the release build carries no profile.
+- **Moving from 1.3.1 or earlier.** The first signed build has a different signature than the
+  ad-hoc one it replaces, so macOS may ask once more for camera, microphone, location or keychain
+  access. Later signed builds keep the same identity, and the grants stay.
 
 ## Signing Mira yourself
 

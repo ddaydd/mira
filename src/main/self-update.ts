@@ -1,13 +1,14 @@
-// Self-update for the published (unsigned) macOS build: the pure half.
+// Self-update for the published macOS build: the pure half.
 //
-// Mira has no paid Apple Developer account, so a published build is ad-hoc
-// signed. Electron's standard updater (Squirrel.Mac) refuses that: it checks
-// that the new bundle satisfies the running one's designated requirement, which
-// for an ad-hoc signature is its own cdhash — no two builds ever match. So Mira
-// updates itself: download the release zip, check its SHA-256 against the
-// checksum published next to it, unpack and inspect the bundle, then swap it in
-// once Mira has quit (a detached shell script does the swap, the running bundle
-// cannot replace itself).
+// Releases up to 1.3.1 were ad-hoc signed, and Electron's standard updater
+// (Squirrel.Mac) refuses that: it checks that the new bundle satisfies the
+// running one's designated requirement, which for an ad-hoc signature is its own
+// cdhash — no two builds ever match. So Mira updates itself, and still does now
+// that releases are signed with a Developer ID certificate and notarized: an
+// ad-hoc 1.3.1 must be able to update to a signed build. Download the release
+// zip, check its SHA-256 against the checksum published next to it, unpack and
+// inspect the bundle, then swap it in once Mira has quit (a detached shell script
+// does the swap, the running bundle cannot replace itself).
 //
 // Only a build made by bin/release.sh does any of this ("release" distribution,
 // stamped into its package.json). A local build — signed with the owner's own
@@ -19,7 +20,7 @@
 
 import { formatVersion, parseVersion, type Version } from './update-check'
 
-/** How this build was made. `release` = bin/release.sh (unsigned, self-updating);
+/** How this build was made. `release` = bin/release.sh (Developer ID, self-updating);
  * `local` = anything else (npm run build:mac, bin/build.sh, dev). */
 export type Distribution = 'release' | 'local'
 
@@ -142,29 +143,24 @@ fi
 exit 0
 `
 
-/** Whether to show the "this build is unsigned" notice at launch: release builds
- * only, until the user ticks "Don't show this again". */
-export function shouldShowUnsignedNotice(distribution: Distribution, dismissed: boolean): boolean {
+/** Whether to show the release notice at launch: release builds only, until the
+ * user ticks "Don't show this again". */
+export function shouldShowReleaseNotice(distribution: Distribution, dismissed: boolean): boolean {
   return distribution === 'release' && !dismissed
 }
 
 export const SIGNING_DOC_URL =
   'https://github.com/micktaiwan/mira/blob/master/docs/releases.md#signing-mira-yourself'
 
-/** The launch notice of an unsigned build. */
-export const UNSIGNED_NOTICE = {
-  message: 'This copy of Mira is not signed',
+/** The launch notice of a release build: what it cannot do. */
+export const RELEASE_NOTICE = {
+  message: 'Passkeys with Touch ID are not available in this copy of Mira',
   detail:
-    'It was built without an Apple Developer certificate. Most of Mira works the same: ' +
-    'browsing, profiles, extensions, the command line and automatic updates.\n\n' +
-    'What an unsigned build cannot do:\n' +
-    '• Passkeys with Touch ID (WebAuthn). They need a keychain entitlement that only a ' +
-    'signed build can carry.\n\n' +
-    'What may be less smooth:\n' +
-    '• After an update, macOS may ask again for camera, microphone, location or keychain ' +
-    'access, because each unsigned build looks like a new app to it.\n\n' +
-    'For a fully functional Mira, build it from source and sign it with your own Apple ' +
-    'Development certificate.',
+    'This build is signed and notarized, and everything else works: browsing, profiles, ' +
+    'extensions, the command line and automatic updates.\n\n' +
+    'Passkeys with Touch ID (WebAuthn) need a keychain entitlement that a downloaded ' +
+    'build does not carry. To use them, build Mira from source and sign it with your own ' +
+    'Apple Development certificate.',
   buttons: ['OK', 'How to sign Mira'],
   checkbox: "Don't show this again"
 } as const

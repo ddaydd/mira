@@ -1,5 +1,9 @@
-# Build, ad-hoc sign and zip the PUBLISHED macOS app for one architecture.
+# Build, sign, notarize and zip the PUBLISHED macOS app for one architecture.
 # Sourced by bin/release.sh. Not executable on its own.
+#
+# Needs MIRA_RELEASE_IDENTITY (the Developer ID Application certificate, without
+# its prefix) and MIRA_NOTARY_PROFILE (a `notarytool store-credentials` keychain
+# profile); bin/release.sh checks both before it bumps anything.
 #
 # build_release_zip <outputDir> <version> <arch> leaves the zip and its .sha256 in
 # <outputDir> and sets RELEASE_ZIP to the zip's name. <arch> is arm64 or x64, and
@@ -38,6 +42,30 @@ fetch_electron_zip() {
     }
   fi
   export MIRA_ELECTRON_DIST="$cache"
+}
+
+# Send the signed app to Apple's notary service, wait for its verdict, and staple
+# the ticket into the bundle, so Gatekeeper accepts a downloaded copy even
+# offline. notarytool's exit code does not say whether Apple accepted the app:
+# read the status from its JSON, and print Apple's log when it is not Accepted.
+notarize_app() {
+  local out="$1" app="$2"
+  local zip="$out/notarize.zip" result id status
+  ditto -c -k --sequesterRsrc --keepParent "$app" "$zip"
+  result="$(xcrun notarytool submit "$zip" --keychain-profile "$MIRA_NOTARY_PROFILE" \
+    --wait --timeout 1h --output-format json)" || true
+  rm -f "$zip"
+  id="$(node -p 'JSON.parse(process.argv[1]).id ?? ""' "$result")"
+  status="$(node -p 'JSON.parse(process.argv[1]).status ?? ""' "$result")"
+  echo "notarization $id: $status"
+  if [ "$status" != Accepted ]; then
+    [ -n "$id" ] && xcrun notarytool log "$id" --keychain-profile "$MIRA_NOTARY_PROFILE" >&2
+    echo "refusing to publish, Apple did not accept $app: $result" >&2
+    return 1
+  fi
+  xcrun stapler staple "$app"
+  xcrun stapler validate "$app"
+  spctl --assess --type execute -vv "$app"
 }
 
 build_release_zip() {
@@ -85,22 +113,22 @@ if (dirs.size) { console.error("refusing to publish, unexpected files in app.asa
     return 1
   }
 
-  # The Electron zip ships the helper apps already signed; electron-builder renames
-  # them and rewrites their Info.plist, which leaves that signature invalid. On an
-  # Intel Mac, signing the bundle in one `--deep` pass then died on it (`Mira.app:
-  # nested code is modified or invalid`, Robin Bonduelle, 2026-09-26). It did not
-  # happen when building x64 on an arm64 Mac (2026-10-06); cause not established.
-  # Re-signing the helpers first costs nothing either way.
-  local helper
-  for helper in "$app"/Contents/Frameworks/*.app; do
-    codesign --force --deep --sign - "$helper"
-  done
-
-  # Ad-hoc signature: required for the app to run at all on Apple Silicon, and what
-  # the self-update's `codesign --verify` checks. Not a Developer ID: Gatekeeper
-  # still blocks a downloaded copy until the user allows it once.
-  codesign --force --deep --sign - "$app"
+  # electron-builder signed every Mach-O with the Developer ID certificate and the
+  # hardened runtime (bin/release-build.cjs). Check it did, before Apple sees it.
   codesign --verify --deep --strict "$app"
+  local sig
+  sig="$(codesign -dv --verbose=4 "$app" 2>&1)"
+  grep -q '^Authority=Developer ID Application:' <<<"$sig" || {
+    echo "refusing to publish, $app is not signed with a Developer ID certificate:" >&2
+    echo "$sig" >&2
+    return 1
+  }
+  grep -q '^CodeDirectory .*flags=.*(runtime)' <<<"$sig" || {
+    echo "refusing to publish, $app is not signed with the hardened runtime" >&2
+    return 1
+  }
+
+  notarize_app "$out" "$app"
 
   RELEASE_ZIP="Mira-$version-mac-$arch.zip"
   ditto -c -k --sequesterRsrc --keepParent "$app" "$out/$RELEASE_ZIP"

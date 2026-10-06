@@ -10,7 +10,7 @@ import {
   distributionOf,
   isTranslocated,
   parseSha256File,
-  shouldShowUnsignedNotice,
+  shouldShowReleaseNotice,
   updateAssetsFor
 } from './self-update'
 
@@ -92,11 +92,11 @@ describe('bundlePathOf / isTranslocated', () => {
   })
 })
 
-describe('shouldShowUnsignedNotice', () => {
+describe('shouldShowReleaseNotice', () => {
   it('shows on a release build until dismissed, never on a local build', () => {
-    expect(shouldShowUnsignedNotice('release', false)).toBe(true)
-    expect(shouldShowUnsignedNotice('release', true)).toBe(false)
-    expect(shouldShowUnsignedNotice('local', false)).toBe(false)
+    expect(shouldShowReleaseNotice('release', false)).toBe(true)
+    expect(shouldShowReleaseNotice('release', true)).toBe(false)
+    expect(shouldShowReleaseNotice('local', false)).toBe(false)
   })
 })
 

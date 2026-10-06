@@ -91,7 +91,7 @@ export function noticeFor(
   }
 }
 
-/** A published (unsigned, self-updating) build does not just announce a new
+/** A published (self-updating) build does not just announce a new
  * release: it downloads, verifies and stages it (self-update-service.ts), then
  * says it is ready. The swap happens when Mira quits; clicking restarts now.
  * A failure falls back to the release page. The daily check announces a version

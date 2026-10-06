@@ -63,10 +63,11 @@ transport), `src/main/profiles.ts` (window/profile lifecycle), `src/main/index.t
 Download the latest `Mira-<version>-mac-<arch>.zip` for your Mac (`arm64` for Apple Silicon, `x64`
 for Intel) from
 [Releases](https://github.com/micktaiwan/mira/releases), unzip it and move `Mira.app` to
-`/Applications`. The published build is **not signed** with an Apple Developer certificate: macOS
-blocks it the first time (allow it in System Settings → Privacy & Security, or run
-`xattr -dr com.apple.quarantine /Applications/Mira.app`). It then updates itself. Touch ID
-passkeys need a build signed with your own certificate: see [`docs/releases.md`](./docs/releases.md).
+`/Applications`. Releases after 1.3.1 are signed with a Developer ID certificate and notarized by
+Apple, so macOS opens them without a warning (1.3.1 and earlier are not: allow them once in System
+Settings → Privacy & Security, or run `xattr -dr com.apple.quarantine /Applications/Mira.app`).
+Mira then updates itself. Touch ID passkeys need a build signed with your own certificate: see
+[`docs/releases.md`](./docs/releases.md).
 
 ## Development
 

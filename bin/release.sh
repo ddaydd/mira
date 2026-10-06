@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
-# Publish a Mira release for macOS: bump the version, build the unsigned
-# "release" app, zip it with its SHA-256, tag, push, and create the GitHub release
-# that running Mira builds update themselves from (src/main/self-update.ts).
+# Publish a Mira release for macOS: bump the version, build the "release" app,
+# sign it with the Developer ID certificate, notarize it, zip it with its SHA-256,
+# tag, push, and create the GitHub release that running Mira builds update
+# themselves from (src/main/self-update.ts).
 #
 # Usage: bin/release.sh <major|minor|patch>
 #
-# Needs a clean master and `gh` logged in. It PUBLISHES (tag, push, public
-# release): run it only when a release was asked for.
-#
-# The published app is ad-hoc signed, not with an Apple Developer certificate:
-# see docs/releases.md for what that costs and how to sign your own build.
+# Needs a clean master, `gh` logged in, a "Developer ID Application" certificate
+# in the keychain and a notarytool keychain profile (MIRA_NOTARY_PROFILE, default
+# mira-notary; see docs/releases.md). It PUBLISHES (tag, push, public release):
+# run it only when a release was asked for.
 #
 # It publishes both macOS architectures, arm64 and x64, from this one Mac: the
-# build, sign and zip steps are in bin/release-app.sh.
+# build, sign, notarize and zip steps are in bin/release-app.sh.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -27,6 +27,25 @@ case "$bump" in
     exit 2
     ;;
 esac
+
+# Signing and notarization are checked before anything is bumped: a missing
+# certificate or profile must not leave a half-made release behind.
+if [ -z "${MIRA_RELEASE_IDENTITY:-}" ]; then
+  ids="$(security find-identity -v -p codesigning | sed -n 's/.*"Developer ID Application: \(.*\)"$/\1/p')"
+  [ "$(grep -c . <<<"$ids")" = 1 ] || {
+    echo "need exactly one Developer ID Application certificate, found:" >&2
+    echo "${ids:-none}" >&2
+    echo "set MIRA_RELEASE_IDENTITY to the one to use (without its prefix)" >&2
+    exit 1
+  }
+  MIRA_RELEASE_IDENTITY="$ids"
+fi
+export MIRA_RELEASE_IDENTITY
+export MIRA_NOTARY_PROFILE="${MIRA_NOTARY_PROFILE:-mira-notary}"
+xcrun notarytool history --keychain-profile "$MIRA_NOTARY_PROFILE" >/dev/null || {
+  echo "notarytool keychain profile $MIRA_NOTARY_PROFILE does not work (docs/releases.md)" >&2
+  exit 1
+}
 
 [ "$(git rev-parse --abbrev-ref HEAD)" = master ] || { echo "not on master" >&2; exit 1; }
 [ -z "$(git status --porcelain)" ] || { echo "working tree not clean" >&2; exit 1; }
@@ -67,13 +86,12 @@ $changes
 
 1. Download the zip for your Mac, \`Mira-$version-mac-arm64.zip\` for Apple Silicon or
    \`Mira-$version-mac-x64.zip\` for Intel, unzip it, move \`Mira.app\` to \`/Applications\`.
-2. This build is not signed with an Apple Developer certificate, so macOS blocks it the first
-   time. Run \`xattr -dr com.apple.quarantine /Applications/Mira.app\`, or open it once and allow
-   it in System Settings → Privacy & Security.
+2. Open it. The app is signed with a Developer ID certificate and notarized by Apple, so macOS
+   opens it without a warning.
 3. From then on Mira updates itself: it downloads each new release, checks its SHA-256, and
    installs it when you quit.
 
-What an unsigned build cannot do, and how to sign your own:
+What a downloaded build cannot do (Touch ID passkeys), and how to build your own:
 https://github.com/micktaiwan/mira/blob/master/docs/releases.md
 NOTES
 )"
