@@ -378,6 +378,24 @@ before concluding.
   `execCommand` returns `false` when the field is not really focused — the signal to click it
   first, not to retry. ⚠️ `mira exec` times out at 5 seconds, so a huge text is still pushed in
   chunks (see the upload recipe above).
+- **A tab that is not the active one in its window has no layout at all.** `innerWidth` and
+  `innerHeight` read `0x0`, so `snap` returns an empty list, `click --selector` finds nothing, and
+  `shot` writes a blank or absurdly narrow PNG (measured 2026-10-06: `413×2541` and a 12 KB solid
+  image). This is not the "covered window" case above — the window can be perfectly visible, the
+  tab just is not on top of its own strip. It bites every `-b` (background) tab, which is the
+  default way to work. **The fix is `mira call activate-tab --params '{"id":"<tab>"}'` on a tab of
+  YOUR OWN session window**, which costs nothing (nobody is looking at that window) and never
+  raises the app. Do not activate a tab in one of the user's windows: that switches what they are
+  looking at. `exec` keeps working at `0x0`, which is exactly why the failure is silent — the text
+  extraction succeeds and only the clicks and the screenshots come back empty.
+- **A `mira exec` that times out at 5 s has still run in the page, and the action it fired is
+  done.** The CLI gives up waiting; the JavaScript does not stop. So an `exec` that does something
+  — clicking a button, submitting a form, POSTing — must never contain its own `await sleep`:
+  write the waits as shell `sleep` between separate short `exec` calls. And **never retry a write
+  `exec` that answered `executeJavaScript timed out`** without first reading the page: the first
+  one probably worked. Measured 2026-10-06 on Bastion: a loop of async execs that each slept ~7 s
+  returned eleven timeouts in a row, created all eleven records anyway, and fired twice on six of
+  them, leaving every task duplicated.
 
 ## Improving the CLI as you go
 

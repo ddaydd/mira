@@ -251,6 +251,17 @@ export class BitwardenService {
     const session = opts.session ?? this.sessions.get(opts.vault.appDataDir) ?? null
     const env = { ...bwEnv(process.env, opts.vault, session), ...(opts.extraEnv ?? {}) }
     return new Promise<RunResult>((resolve, reject) => {
+      // Every failure is logged before the UI turns it into a one-line bubble
+      // message ("Could not unlock the vault"), which cannot tell a wrong master
+      // password from a session key bw refused. bw's stderr never carries the
+      // password (it arrives by env) nor the item (it arrives on stdin).
+      const fail = (error: BitwardenError): void => {
+        const detail = error.message.replace(/\s+/g, ' ').slice(0, 300)
+        console.warn(
+          `[mira-bw] bw ${args[0]} failed vault=${opts.vault.appDataDir} reason=${error.reason}: ${detail}`
+        )
+        reject(error)
+      }
       const child = spawn(this.bwBinary(), args, { env, stdio: ['pipe', 'pipe', 'pipe'] })
       let stdout = ''
       let stderr = ''
@@ -259,7 +270,7 @@ export class BitwardenService {
         if (settled) return
         settled = true
         child.kill('SIGKILL')
-        reject(new BitwardenError('failed', `bw ${args[0]} timed out`))
+        fail(new BitwardenError('failed', `bw ${args[0]} timed out`))
       }, TIMEOUT_MS)
       child.stdout.on('data', (chunk) => (stdout += String(chunk)))
       child.stderr.on('data', (chunk) => (stderr += String(chunk)))
@@ -267,14 +278,14 @@ export class BitwardenService {
         if (settled) return
         settled = true
         clearTimeout(timer)
-        reject(new BitwardenError(classifyFailure(String(error)), String(error)))
+        fail(new BitwardenError(classifyFailure(String(error)), String(error)))
       })
       child.on('close', (code) => {
         if (settled) return
         settled = true
         clearTimeout(timer)
         if (code === 0) resolve({ code, stdout, stderr })
-        else reject(new BitwardenError(classifyFailure(stderr), stderr.trim() || `bw exit ${code}`))
+        else fail(new BitwardenError(classifyFailure(stderr), stderr.trim() || `bw exit ${code}`))
       })
       // Feed stdin and close it at once: an open stdin is what lets bw sit on a
       // "Master password:" prompt forever.
