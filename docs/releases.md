@@ -9,7 +9,7 @@ page says what that costs and how to sign your own build.
 | | Published build (`bin/release.sh`) | Local build (`bin/build.sh`, `npm run build:mac`) |
 |---|---|---|
 | Signature | ad-hoc | your Apple Development certificate + provisioning profile |
-| Runs on | any Apple Silicon Mac, after allowing it once | only the Macs listed in your profile |
+| Runs on | any Mac, Apple Silicon or Intel, after allowing it once | only the Macs listed in your profile |
 | Touch ID passkeys (WebAuthn) | no | yes |
 | Updates itself | yes | no, rebuild from source |
 | Unsigned notice at launch | yes, until dismissed | no |
@@ -25,16 +25,35 @@ bin/release.sh patch   # or minor / major
 ```
 
 On a clean `master` with `gh` logged in, it: runs the typecheck and the tests, bumps the version
-in `package.json`, builds the native addons and the app, builds the release app with
-`bin/release-build.cjs` (electron-builder with the owner-only signing stripped out), ad-hoc signs
-it (`codesign --sign -`), zips it with `ditto`, writes `Mira-<version>-mac-<arch>.zip.sha256`,
-commits `release: v<version>`, tags, pushes, and creates the GitHub release with both files and
-install notes. It publishes: run it only when a release is wanted.
+in `package.json`, then, once per architecture (`arm64` and `x64`, this Mac's last), builds the
+native addons and the app, builds the release app with `bin/release-build.cjs` (electron-builder
+with the owner-only signing stripped out), ad-hoc signs it (`codesign --sign -`), zips it with
+`ditto` and writes `Mira-<version>-mac-<arch>.zip.sha256`. It then commits `release: v<version>`,
+tags, pushes, and creates the GitHub release with the four files and install notes. It publishes:
+run it only when a release is wanted. The per-architecture steps live in `bin/release-app.sh`.
 
 Before signing, it refuses to go on if `app.asar` holds anything besides `out/`, `resources/`,
 `node_modules/` and `package.json`. `electron-builder.yml`'s `files` is an allow-list for the same
 reason: the 1.1.0 zip, built when it was still a deny-list, carried every file lying at the repo
-root (older builds in `dist/`, local notes, scratch scripts) and its assets were deleted.
+root (older builds in `dist/`, local notes, scratch scripts) and its assets were deleted. It also
+refuses a bundle holding any Mach-O file of the other architecture.
+
+## Both architectures from one Mac
+
+The other architecture is cross-built, not built on a second Mac: node-gyp compiles the native
+addons (`native/mira-*`) for the architecture it is given (`MIRA_ARCH`, read by the `build:addon:*`
+scripts), and electron-builder packs the Electron of that architecture (`MIRA_ARCH` again, read by
+`bin/release-build.cjs`). Electron's zip is fetched first with `curl` into
+`~/Library/Caches/mira-release/electron/<version>/` and checked against Electron's
+`SHASUMS256.txt`, because electron-builder's own download once stalled for its full 10-minute
+timeout.
+
+Checked on 2026-10-06, building 1.3.0 for x64 on an Apple Silicon Mac: every Mach-O in the bundle is
+x86_64, the signature passes `codesign --verify --deep --strict`, and the three addons load in the
+x64 Electron under Rosetta. The x64 app itself was not launched on an Intel Mac by that check.
+
+After a release, `native/*/build` holds the addons of this Mac's architecture (built last), so
+`npm run dev` keeps working.
 
 ## How the self-update works
 
@@ -60,7 +79,8 @@ Limits:
   replace itself: the update fails with a message saying to move Mira first.
 - The daily check announces each version once. If its download fails, **Check for Updates** in the
   app menu retries it.
-- Apple Silicon only: the release is built on the publishing machine's architecture.
+- A release published before 1.3.1 carries the Apple Silicon zip only: an Intel Mira finds no
+  asset in it, and the update fails with a notification naming the missing zip.
 
 ## What an unsigned build cannot do
 

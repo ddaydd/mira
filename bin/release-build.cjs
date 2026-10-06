@@ -11,7 +11,10 @@
 // package.json, which is what turns on the unsigned notice and the self-update
 // (src/main/self-update.ts).
 //
-// Usage: node bin/release-build.cjs <outputDir>
+// Usage: [MIRA_ARCH=arm64|x64] [MIRA_ELECTRON_DIST=<dir>] node bin/release-build.cjs <outputDir>
+// MIRA_ARCH defaults to this Mac's architecture; bin/release-app.sh sets it to
+// build the other one too. MIRA_ELECTRON_DIST is a folder holding Electron's
+// darwin zip for that architecture, so electron-builder does not download it.
 /* eslint-disable @typescript-eslint/no-require-imports -- plain CommonJS, run by node without a build */
 const { readFileSync } = require('node:fs')
 const yaml = require('js-yaml')
@@ -33,10 +36,12 @@ delete mac.entitlements
 delete mac.entitlementsInherit
 config.mac = mac
 delete config.publish
+if (process.env.MIRA_ELECTRON_DIST) config.electronDist = process.env.MIRA_ELECTRON_DIST
 
-const arch = Arch[process.arch]
+const archName = process.env.MIRA_ARCH || process.arch
+const arch = Arch[archName]
 if (arch === undefined) {
-  console.error(`unsupported arch ${process.arch}`)
+  console.error(`unsupported arch ${archName}`)
   process.exit(2)
 }
 
