@@ -149,7 +149,7 @@ So Mira keeps one window per agent session, per profile:
 
 The `mira` CLI does this by itself: inside Claude Code (`CLAUDE_CODE_SESSION_ID`
 set, `CLAUDE_PID` sent as `pid`) and with no `--tab`/`$MIRA_TAB`/`--window`, the tab
-verbs (`exec`, `click`, `wait`, `press`, `reload`, `shot`, `console`, `nav`, `open`,
+verbs (`exec`, `click`, `snap`, `type`, `select`, `wait`, `press`, `reload`, `shot`, `console`, `nav`, `open`,
 `batch`, and `call` of a tab-bound command) aim at the session's window;
 `--profile` picks its profile. `tabs` and `use` are left out on purpose: they are
 how a session finds the pages the USER has open; `mira tabs --session` lists the

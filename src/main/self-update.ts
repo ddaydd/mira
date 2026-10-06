@@ -12,8 +12,7 @@
 //
 // Only a build made by bin/release.sh does any of this ("release" distribution,
 // stamped into its package.json). A local build — signed with the owner's own
-// certificate, the only kind that can carry Touch ID passkeys — is never replaced
-// by a download.
+// certificate — is never replaced by a download.
 //
 // Everything here is pure; the network, disk and process work is in
 // self-update-service.ts.
@@ -142,25 +141,3 @@ fi
 [ "$relaunch" = "1" ] && open -g -a "$target"
 exit 0
 `
-
-/** Whether to show the release notice at launch: release builds only, until the
- * user ticks "Don't show this again". */
-export function shouldShowReleaseNotice(distribution: Distribution, dismissed: boolean): boolean {
-  return distribution === 'release' && !dismissed
-}
-
-export const SIGNING_DOC_URL =
-  'https://github.com/micktaiwan/mira/blob/master/docs/releases.md#signing-mira-yourself'
-
-/** The launch notice of a release build: what it cannot do. */
-export const RELEASE_NOTICE = {
-  message: 'Passkeys with Touch ID are not available in this copy of Mira',
-  detail:
-    'This build is signed and notarized, and everything else works: browsing, profiles, ' +
-    'extensions, the command line and automatic updates.\n\n' +
-    'Passkeys with Touch ID (WebAuthn) need a keychain entitlement that a downloaded ' +
-    'build does not carry. To use them, build Mira from source and sign it with your own ' +
-    'Apple Development certificate.',
-  buttons: ['OK', 'How to sign Mira'],
-  checkbox: "Don't show this again"
-} as const

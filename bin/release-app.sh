@@ -128,6 +128,18 @@ if (dirs.size) { console.error("refusing to publish, unexpected files in app.asa
     return 1
   }
 
+  # The Developer ID profile is what makes the keychain group valid at runtime
+  # (Touch ID passkeys): without it in the bundle, the entitlement would not
+  # validate and WebAuthn would hang.
+  [ -f "$app/Contents/embedded.provisionprofile" ] || {
+    echo "refusing to publish, $app embeds no provisioning profile" >&2
+    return 1
+  }
+  codesign -d --entitlements - --xml "$app" 2>/dev/null | grep -q keychain-access-groups || {
+    echo "refusing to publish, $app is not signed with the keychain-access-groups entitlement" >&2
+    return 1
+  }
+
   notarize_app "$out" "$app"
 
   RELEASE_ZIP="Mira-$version-mac-$arch.zip"

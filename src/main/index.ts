@@ -49,7 +49,7 @@ import {
   QUIT_CONFIRM
 } from './quit'
 import { installTouchIdWebAuthn } from './webauthn'
-import { applyStagedUpdateOnQuit, maybeShowReleaseNotice } from './self-update-service'
+import { applyStagedUpdateOnQuit } from './self-update-service'
 import { QuitTimeline, lockingStepLabel } from './quit-progress'
 import { showQuitProgress } from './quit-progress-window'
 import { aboutPanelOptions } from './about'
@@ -822,9 +822,6 @@ app.whenReady().then(async () => {
   // A `--profile <id>` flag / MIRA_PROFILE env var forces booting into that one
   // profile alone (a dedicated test profile), bypassing the last-open restore.
   profiles.openSavedProfiles(parseProfileArg(process.argv, process.env))
-
-  // A published build has no Touch ID passkeys: say it once (self-update.ts).
-  maybeShowReleaseNotice().catch((error) => console.error('[mira] release notice', error))
 
   // The manager now exists and has a window: route default-browser link handoffs
   // to it, and flush any links that arrived during a cold launch (see above).

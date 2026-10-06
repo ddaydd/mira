@@ -1,7 +1,7 @@
 # Bundle id: com.mira.app was arbitrary AND is already registered to another Apple
 # team (Apple refuses to register it to ours), so it can't carry a provisioning
-# profile. com.mickaelfm.mira is registrable under the free personal team ZMKDR6H89Y,
-# which is required for the WebAuthn keychain-access-groups entitlement (webauthn.ts).
+# profile. com.mickaelfm.mira is registered under team ZMKDR6H89Y, which is required
+# for the WebAuthn keychain-access-groups entitlement (webauthn.ts).
 appId: com.mickaelfm.mira
 productName: Mira
 directories:
@@ -55,15 +55,15 @@ nsis:
   uninstallDisplayName: ${productName}
   createDesktopShortcut: always
 mac:
-  # Development signing (not distribution): Mira is a personal, non-distributed build,
-  # and only a development-signed app with an embedded provisioning profile can carry the
-  # AMFI-restricted keychain-access-groups entitlement (WebAuthn Touch ID, see webauthn.ts).
-  # `type: development` makes electron-builder accept the "Apple Development" cert; without
-  # it, it looks for a "Developer ID Application" cert we don't have. identity pins that
-  # exact cert. provisioningProfile is minted from the free personal team (ZMKDR6H89Y) and
-  # EXPIRES 7 DAYS after creation — re-mint + rebuild weekly (see build/embedded.provisionprofile).
-  type: development
-  identity: 'Apple Development: faivrem@gmail.com (23L76N6978)'
+  # Developer ID signing, the same certificate and profile as the published release
+  # (bin/release-build.cjs). Only an app with an embedded provisioning profile can carry
+  # the AMFI-restricted keychain-access-groups entitlement (WebAuthn Touch ID, see
+  # webauthn.ts). build/embedded.provisionprofile is the Developer ID profile "Mira
+  # Developer ID" (team ZMKDR6H89Y, every Mac), valid as long as the certificate:
+  # 2031-09-17. identity is the certificate name without its "Developer ID Application: "
+  # prefix (electron-builder refuses the prefix). Until 2026-10-06 this was an Apple
+  # Development certificate with a free-team profile that expired every 7 days.
+  identity: 'Mickael Faivre-Maçon (ZMKDR6H89Y)'
   provisioningProfile: build/embedded.provisionprofile
   # Main app carries keychain-access-groups (it embeds the profile); the child
   # helpers must NOT (no embedded profile → AMFI kills them at launch), so they

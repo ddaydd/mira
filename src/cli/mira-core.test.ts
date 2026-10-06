@@ -611,6 +611,14 @@ describe('sessionTarget', () => {
     expect(sessionTarget({ command: 'open', env })).toEqual({ sessionId: 'sess-1', pid: 4242 })
   })
 
+  it('sends the snap verbs to the session window, aliases included', () => {
+    // `snap`, `type` and `select` are CLI names, not registry names: without them
+    // here, `mira snap` read the user's focused tab while `exec` read the session's.
+    for (const command of ['snap', 'snapshot', 'type', 'select']) {
+      expect(sessionTarget({ command, env })).toEqual({ sessionId: 'sess-1', pid: 4242 })
+    }
+  })
+
   it('stays out outside a Claude Code session or when opted out', () => {
     expect(sessionTarget({ command: 'exec', env: {} })).toBeNull()
     expect(

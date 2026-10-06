@@ -1,16 +1,15 @@
 #!/usr/bin/env node
 // Build the PUBLISHED macOS app: the one bin/release.sh zips and uploads.
 //
-// It is electron-builder.yml with the owner-only signing swapped out. The local
-// build is signed with a personal Apple Development certificate and a provisioning
-// profile that lists ONE Mac (see the mac section of electron-builder.yml) — a
-// binary signed that way cannot be handed to anyone. So here: the "Developer ID
-// Application" certificate (MIRA_RELEASE_IDENTITY, resolved by bin/release.sh),
-// the hardened runtime that notarization requires, no provisioning profile, and
-// for the main app the same entitlements as the helpers
-// (build/entitlements.mac.inherit.plist): keychain-access-groups and the
-// application identifier are only valid next to a profile that authorizes them.
-// An unpacked `dir` target, and a `miraDistribution: release` stamp in the
+// It is electron-builder.yml, signed the same way as the local build: the
+// "Developer ID Application" certificate (MIRA_RELEASE_IDENTITY, resolved by
+// bin/release.sh), the hardened runtime that notarization requires, and the
+// Developer ID provisioning profile build/embedded.provisionprofile (every Mac,
+// valid until 2031-09-17). That profile is what authorizes the main app's
+// keychain-access-groups and application identifier (build/entitlements.mac.plist),
+// so Touch ID passkeys work in a downloaded Mira; the helpers embed no profile and
+// keep the inherit plist. What differs from the local build: an unpacked `dir`
+// target, the chosen architecture, and a `miraDistribution: release` stamp in the
 // packaged package.json, which is what turns on the self-update
 // (src/main/self-update.ts). Notarization happens after, in bin/release-app.sh.
 //
@@ -38,7 +37,6 @@ if (!identity) {
   process.exit(2)
 }
 
-const entitlements = 'build/entitlements.mac.inherit.plist'
 const config = yaml.load(readFileSync('electron-builder.yml', 'utf8'))
 config.directories = { ...config.directories, output }
 config.extraMetadata = { ...config.extraMetadata, miraDistribution: 'release' }
@@ -48,11 +46,8 @@ const mac = {
   type: 'distribution',
   target: 'dir',
   hardenedRuntime: true,
-  entitlements,
-  entitlementsInherit: entitlements,
   notarize: false
 }
-delete mac.provisioningProfile
 config.mac = mac
 delete config.publish
 if (process.env.MIRA_ELECTRON_DIST) config.electronDist = process.env.MIRA_ELECTRON_DIST

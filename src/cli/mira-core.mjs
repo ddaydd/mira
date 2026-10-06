@@ -152,6 +152,10 @@ export function resolveTabId({ flagTab, envTab } = {}) {
 export const SESSION_VERBS = new Set([
   'exec',
   'click',
+  'snap',
+  'snapshot',
+  'type',
+  'select',
   'wait',
   'batch',
   'press',

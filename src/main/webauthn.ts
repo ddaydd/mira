@@ -9,7 +9,7 @@
 // must appear in the app's `keychain-access-groups` code-signing entitlement
 // (build/entitlements.mac.plist), which is AMFI-restricted: it only takes effect when the
 // bundle embeds a provisioning profile authorizing that group (build/embedded.provisionprofile,
-// minted from the free personal team ZMKDR6H89Y). In `npm run dev` there is no entitlement,
+// the Developer ID profile of team ZMKDR6H89Y). In `npm run dev` there is no entitlement,
 // so we skip the call entirely.
 //
 // Note: Electron's Touch ID authenticator stores credentials in its OWN keychain access

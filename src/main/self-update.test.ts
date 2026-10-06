@@ -10,7 +10,6 @@ import {
   distributionOf,
   isTranslocated,
   parseSha256File,
-  shouldShowReleaseNotice,
   updateAssetsFor
 } from './self-update'
 
@@ -89,14 +88,6 @@ describe('bundlePathOf / isTranslocated', () => {
   it('spots App Translocation', () => {
     expect(isTranslocated('/private/var/folders/x/AppTranslocation/ABC/d/Mira.app')).toBe(true)
     expect(isTranslocated('/Applications/Mira.app')).toBe(false)
-  })
-})
-
-describe('shouldShowReleaseNotice', () => {
-  it('shows on a release build until dismissed, never on a local build', () => {
-    expect(shouldShowReleaseNotice('release', false)).toBe(true)
-    expect(shouldShowReleaseNotice('release', true)).toBe(false)
-    expect(shouldShowReleaseNotice('local', false)).toBe(false)
   })
 })
 

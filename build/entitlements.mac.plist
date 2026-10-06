@@ -28,8 +28,8 @@
     <true/>
     <!-- WebAuthn Touch ID platform authenticator: app.configureWebAuthn stores
          credentials under this keychain access group (see src/main/webauthn.ts).
-         AMFI-restricted → only valid because build/embedded.provisionprofile (minted
-         from the free personal team ZMKDR6H89Y) authorizes this exact group. The
+         AMFI-restricted → only valid because build/embedded.provisionprofile (the
+         Developer ID profile of team ZMKDR6H89Y) authorizes this exact group. The
          group MUST match WEBAUTHN_KEYCHAIN_GROUP in webauthn.ts. -->
     <key>keychain-access-groups</key>
     <array>

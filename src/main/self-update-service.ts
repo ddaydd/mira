@@ -11,7 +11,7 @@
 //   4. on quit, applyStagedUpdateOnQuit spawns the detached swap script, which
 //      waits for this process to exit and replaces the installed bundle.
 
-import { app, dialog, shell } from 'electron'
+import { app } from 'electron'
 import { execFile, spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import {
@@ -21,7 +21,6 @@ import {
   openSync,
   readFileSync,
   rmSync,
-  writeFileSync,
   accessSync,
   constants
 } from 'node:fs'
@@ -32,13 +31,10 @@ import { promisify } from 'node:util'
 import { formatVersion, type Version } from './update-check'
 import {
   INSTALL_SCRIPT,
-  SIGNING_DOC_URL,
-  RELEASE_NOTICE,
   bundlePathOf,
   distributionOf,
   isTranslocated,
   parseSha256File,
-  shouldShowReleaseNotice,
   updateAssetsFor,
   type Distribution,
   type ReleaseInfo
@@ -200,43 +196,4 @@ export function applyStagedUpdateOnQuit(): void {
   )
   child.unref()
   console.log(`[mira] installing Mira ${stagedVersion} into ${target.path} after quit`)
-}
-
-// Named after the notice of the ad-hoc builds it replaced: a user who dismissed
-// that one is not shown this one either.
-function noticeStatePath(): string {
-  return join(app.getPath('userData'), 'unsigned-notice.json')
-}
-
-/** At launch of a release build: explain once what it cannot do, until the user
- * ticks "Don't show this again". */
-export async function maybeShowReleaseNotice(): Promise<void> {
-  let dismissed = false
-  try {
-    dismissed = JSON.parse(readFileSync(noticeStatePath(), 'utf8')).dismissed === true
-  } catch {
-    // No state yet: first launch.
-  }
-  if (!shouldShowReleaseNotice(distribution(), dismissed)) return
-  const { response, checkboxChecked } = await dialog.showMessageBox({
-    type: 'info',
-    message: RELEASE_NOTICE.message,
-    detail: RELEASE_NOTICE.detail,
-    buttons: [...RELEASE_NOTICE.buttons],
-    defaultId: 0,
-    checkboxLabel: RELEASE_NOTICE.checkbox,
-    checkboxChecked: true
-  })
-  if (checkboxChecked) {
-    try {
-      writeFileSync(noticeStatePath(), `${JSON.stringify({ dismissed: true })}\n`)
-    } catch (error) {
-      console.error('[mira] release notice: cannot save state', error)
-    }
-  }
-  if (response === 1) {
-    shell
-      .openExternal(SIGNING_DOC_URL)
-      .catch((error) => console.error('[mira] open signing doc', error))
-  }
 }

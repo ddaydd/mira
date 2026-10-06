@@ -97,7 +97,7 @@ build, the window still lands on top of every app, without taking the keyboard.
 
 **Each Claude session gets its own Mira window, per profile** (code from 2026-09-26, same caveat:
 only on a Mira built after that day). Without `--tab`, `$MIRA_TAB` or `--window`, `exec`, `click`,
-`wait`, `press`, `reload`, `shot`, `console`, `nav`, `open` and `batch` target the session's
+`snap`, `type`, `select`, `wait`, `press`, `reload`, `shot`, `console`, `nav`, `open` and `batch` target the session's
 window, recognised by `CLAUDE_CODE_SESSION_ID`. Mira creates it on the first call, below the
 frontmost window, with a home tab, and never saves it in the session.
 

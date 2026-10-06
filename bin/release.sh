@@ -91,7 +91,7 @@ $changes
 3. From then on Mira updates itself: it downloads each new release, checks its SHA-256, and
    installs it when you quit.
 
-What a downloaded build cannot do (Touch ID passkeys), and how to build your own:
+How releases are made and how to build your own:
 https://github.com/micktaiwan/mira/blob/master/docs/releases.md
 NOTES
 )"

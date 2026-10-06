@@ -66,8 +66,7 @@ for Intel) from
 `/Applications`. Releases after 1.3.1 are signed with a Developer ID certificate and notarized by
 Apple, so macOS opens them without a warning (1.3.1 and earlier are not: allow them once in System
 Settings → Privacy & Security, or run `xattr -dr com.apple.quarantine /Applications/Mira.app`).
-Mira then updates itself. Touch ID passkeys need a build signed with your own certificate: see
-[`docs/releases.md`](./docs/releases.md).
+Mira then updates itself. Details, and how to build your own: [`docs/releases.md`](./docs/releases.md).
 
 ## Development
 
