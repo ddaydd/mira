@@ -62,8 +62,8 @@ export interface AppMenuHandlers {
    * failed, so Cmd+L then Enter re-navigates to it. */
   focusAddressBar: () => void
   /** Open a new tab (Cmd+T) / close the active tab (Cmd+W) in the focused window.
-   * Wired to the new-tab / close-active-tab commands. Cmd+W closes a tab, never
-   * the window — window closing moves to Cmd+Shift+W (see the File menu). */
+   * Wired to the new-tab / close-active-tab commands. Cmd+W closes a tab, and the
+   * window only with its last tab; Cmd+Shift+W closes the window (File menu). */
   newTab: () => void
   closeTab: () => void
   /** Enter or leave native fullscreen for the focused window (Ctrl+Cmd+F), and
@@ -210,8 +210,8 @@ export function appMenuTemplate(handlers: AppMenuHandlers): MenuItemConstructorO
   }
 
   // A custom File menu: Cmd+W closes the active TAB (not the window), so window
-  // closing moves to Cmd+Shift+W. On the last tab the window stays open on an
-  // empty home (see closeTabIn in profiles.ts). New Tab is Cmd+T.
+  // closing moves to Cmd+Shift+W. On the last tab Cmd+W closes the window too
+  // (see lastTabClosesWindow). New Tab is Cmd+T.
   const fileMenu: MenuItemConstructorOptions = {
     label: 'File',
     submenu: [

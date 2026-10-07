@@ -100,6 +100,7 @@ import { createUpdateChecker, presentInDialog, startUpdateSchedule } from './upd
 import { answersInDialog } from './update-dialog'
 import { shouldSuppressActivation, type NavKind } from './activation-policy'
 import { mayForeground, type CommandOrigin } from './foreground-policy'
+import { lastTabClosesWindow } from './last-tab-close'
 import { isLiveContents } from './live-contents'
 import { type LlmConfig, type ChatMessage, type PageContext } from './llm'
 import { LlmRunner } from './llm-runner'
@@ -3557,28 +3558,29 @@ export class ProfileManager {
       if (next) this.materializeTab(pw, next)
       this.notifyExtensionsActiveTab(pw)
     }
-    // Closing the last tab: if this is a SECONDARY window of the profile (a
-    // torn-off window, others remain), close the window itself. An empty
-    // torn-off window has no reason to linger, and being frameless it offers no
-    // visible way to dismiss it — its state lives in the profile's other windows,
-    // and the 'closed' handler forgets it (the othersRemain path). The profile's
-    // SOLE window instead stays open on an empty home: Cmd+W closes tabs, never
-    // the last window (which would take the profile down with it).
-    if (pw.state.tabs.length === 0) {
-      if (this.windowsForProfile(pw.id).length > 1) {
-        pw.window.close()
-        return { closed: true }
-      }
-      // Force the panel open so the New tab entry point stays reachable.
-      // (Favorites will enrich this later.)
-      pw.panelCollapsed = false
-    }
+    // Closing the last tab: force the panel open so the New tab entry point stays
+    // reachable on the empty home. (Favorites will enrich this later.)
+    if (pw.state.tabs.length === 0) pw.panelCollapsed = false
     // The closed tab leaves no dangling folder membership; an emptied folder keeps
     // its metadata (the user can still see and remove it).
     pw.state = pruneFolderMembership(pw.state, pw.folders)
     this.layout(pw)
     this.pushTabs(pw)
     this.saveSession(pw)
+    // Then close the window when lastTabClosesWindow says so: a secondary
+    // (torn-off) window always, the profile's sole window only on a user close
+    // (Cmd+W, the tab's close button). Done last so a close the user cancels at
+    // the quit question (app's last window) leaves a consistent empty home.
+    if (
+      pw.state.tabs.length === 0 &&
+      lastTabClosesWindow({
+        reason,
+        origin,
+        profileWindowCount: this.windowsForProfile(pw.id).length
+      })
+    ) {
+      pw.window.close()
+    }
     return { closed: true }
   }
 

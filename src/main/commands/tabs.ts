@@ -180,6 +180,30 @@ export interface ListTabsParams {
   /** Window to list (from list-windows). Omitted = the window this context
    * targets. */
   windowId?: string
+  /** Profile whose window to list (from list-profiles), when the caller knows the
+   * profile but not its window. Exclusive with `windowId`. */
+  profileId?: string
+}
+
+/** The list-tabs keys. Any other key is refused: an unknown one used to be
+ * dropped silently, so `{"profile": …}` listed the focused window instead. */
+const LIST_TABS_KEYS = new Set(['windowId', 'profileId'])
+
+/** The window list-tabs reads for `profileId`: the profile's only open window.
+ * Several windows (a tear-off) cannot be merged into one strip, so the caller
+ * gets their ids to pick from. Pure. */
+export function windowForProfile(
+  windows: Array<{ windowId: string; profileId: string }>,
+  profileId: string
+): { windowId: string } | { error: string } {
+  const owned = windows.filter((w) => w.profileId === profileId)
+  if (owned.length === 1) return { windowId: owned[0].windowId }
+  if (owned.length === 0) return { error: `profile not open: ${profileId}` }
+  return {
+    error: `profile ${profileId} has ${owned.length} windows, pass "windowId" (one of ${owned
+      .map((w) => w.windowId)
+      .join(', ')})`
+  }
 }
 
 export interface TabIdParams {
@@ -487,9 +511,31 @@ export const tabsCommands: CommandMap<CommandContext> = {
   // windowId returned the focused window's tabs under another window's id, which
   // reads as a correct answer and is not one.
   'list-tabs': (ctx, params) => {
-    const { windowId } = (params ?? {}) as Partial<ListTabsParams>
+    const unknown = Object.keys((params ?? {}) as object).filter((k) => !LIST_TABS_KEYS.has(k))
+    if (unknown.length > 0) {
+      return {
+        ok: false,
+        error: `unknown param ${unknown.map((k) => `"${k}"`).join(', ')} (accepted: "windowId", "profileId")`
+      }
+    }
+    const { windowId, profileId } = (params ?? {}) as Partial<ListTabsParams>
     if (windowId !== undefined && (typeof windowId !== 'string' || windowId.trim() === '')) {
       return { ok: false, error: '"windowId" must be a non-empty string' }
+    }
+    if (profileId !== undefined && (typeof profileId !== 'string' || profileId.trim() === '')) {
+      return { ok: false, error: '"profileId" must be a non-empty string' }
+    }
+    if (windowId !== undefined && profileId !== undefined) {
+      return { ok: false, error: 'pass "windowId" or "profileId", not both' }
+    }
+    if (profileId !== undefined) {
+      const resolved = windowForProfile(ctx.listWindows(), profileId.trim())
+      if ('error' in resolved) return { ok: false, error: resolved.error }
+      try {
+        return { ok: true, ...ctx.listTabsIn(resolved.windowId) }
+      } catch (error) {
+        return fail(error)
+      }
     }
     if (windowId !== undefined) {
       try {

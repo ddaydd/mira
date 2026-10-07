@@ -617,7 +617,9 @@ app.whenReady().then(async () => {
       closeWindow: () => runDetached('close-window', {}, profiles.contextForMenu()),
       newTab: () => runDetached('new-tab', {}, profiles.contextForFocused()),
       duplicateTab: () => runDetached('duplicate-active-tab', {}, profiles.contextForFocused()),
-      closeTab: () => runDetached('close-active-tab', {}, profiles.contextForFocused()),
+      // Menu context like closeWindow: Cmd+W on the last tab closes the window
+      // (lastTabClosesWindow), which only a user close may do.
+      closeTab: () => runDetached('close-active-tab', {}, profiles.contextForMenu()),
       toggleFullScreen: () =>
         runDetached('set-window-fullscreen', {}, profiles.contextForFocused()),
       exitFullScreen: () =>
@@ -625,7 +627,7 @@ app.whenReady().then(async () => {
       groupDuplicateTabs: () =>
         runDetached('group-duplicate-tabs', {}, profiles.contextForFocused()),
       closeTabToRecent: () =>
-        runDetached('close-active-tab', { focus: 'recent' }, profiles.contextForFocused()),
+        runDetached('close-active-tab', { focus: 'recent' }, profiles.contextForMenu()),
       forgetSite: () => runDetached('forget-site', {}, profiles.contextForFocused()),
       // Cmd+Alt+Backspace: wipe this site's cookies + storage and reload, so the
       // page comes back signed out. The command owns the toast.
