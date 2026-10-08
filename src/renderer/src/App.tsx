@@ -6,6 +6,7 @@ import CommandPalette from './CommandPalette'
 import SkillPane, { type ChatOptions } from './SkillPane'
 import ResizeHandle from './ResizeHandle'
 import ExtensionActions from './features/extensions/ExtensionActions'
+import AppMenuButton from './features/app-menu/AppMenuButton'
 import FindBar from './features/find/FindBar'
 import MediaGallery from './features/media/MediaGallery'
 import { ReloadSpinner } from './features/loading/ReloadSpinner'
@@ -610,6 +611,7 @@ function App(): React.JSX.Element {
           <div className="toolbar-drag" aria-hidden="true">
             Mira <span className="toolbar-drag-version">{__APP_VERSION__}</span>
           </div>
+          <AppMenuButton />
         </div>
       )}
       <div className="body">

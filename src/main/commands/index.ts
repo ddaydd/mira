@@ -54,6 +54,7 @@ import { tabDetachCommands } from './tab-detach'
 import { sessionWindowCommands } from './session-window'
 import { tabMemoryCommands } from './tab-memory'
 import { tabMenuCommands } from './tab-menu'
+import { appMenuCommands } from './app-menu'
 import { tabTidyCommands } from './tab-tidy'
 import { tabTopCommands } from './tab-top'
 import { tabsCommands } from './tabs'
@@ -169,6 +170,7 @@ export type {
 export { formatBytes, rankTabMemory, buildTabMemoryReport, hostOf } from './tab-memory'
 export type { TabDetachContext, WindowInfo } from './tab-detach'
 export type { TabMenuContext } from './tab-menu'
+export type { AppMenuContext } from './app-menu'
 export type { TabsContext, TabInfo, TabKind } from './tabs'
 export type { ThemeContext } from './themes'
 export type { Theme, ThemeInput } from '../theme-store'
@@ -253,6 +255,7 @@ export function createCommandRegistry(): CommandRegistry {
     ...tabDetachCommands,
     ...sessionWindowCommands,
     ...tabMenuCommands,
+    ...appMenuCommands,
     ...tabTidyCommands,
     ...tabTopCommands,
     ...tabsCommands,

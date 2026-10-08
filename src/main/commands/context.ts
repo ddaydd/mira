@@ -47,6 +47,7 @@ import type { UpdateContext } from './update'
 import type { TabFoldersContext } from './tab-folders'
 import type { TabMemoryContext } from './tab-memory'
 import type { TabMenuContext } from './tab-menu'
+import type { AppMenuContext } from './app-menu'
 import type { TabTidyContext } from './tab-tidy'
 import type { TabsContext } from './tabs'
 import type { ThemeContext } from './themes'
@@ -97,6 +98,7 @@ export type CommandContext = AppContext &
   TabFoldersContext &
   TabMemoryContext &
   TabMenuContext &
+  AppMenuContext &
   TabTidyContext &
   TabTopContext &
   TabsContext &

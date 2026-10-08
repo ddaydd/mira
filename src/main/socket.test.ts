@@ -229,6 +229,7 @@ function setup(): {
     }),
     toggleTabsPanel: (collapsed?: boolean) => ({ collapsed: collapsed ?? true }),
     showTabMenu: () => {},
+    showAppMenu: () => {},
     showAudioMenu: () => {},
     listTabFolders: () => ({ folders: [] }),
     createTabFolder: () => ({ id: 'folder-1' }),

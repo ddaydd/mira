@@ -6808,6 +6808,11 @@ export class ProfileManager {
         if (!target) throw new Error('no target window')
         this.showTabMenuIn(target, tabId)
       },
+      showAppMenu: (at) => {
+        if (!target) throw new Error('no target window')
+        if (target.window.isDestroyed()) return
+        Menu.getApplicationMenu()?.popup({ window: target.window, ...at })
+      },
       showAudioMenu: () => {
         if (!target) throw new Error('no target window')
         this.showAudioMenuIn(target)
