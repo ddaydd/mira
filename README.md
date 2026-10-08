@@ -82,7 +82,8 @@ What differs from macOS:
   absent; what depends on them degrades to a no-op (e.g. `list-spaces` returns no displays).
 - Settings, Check for Updates and Quit live in the File menu (no app menu). The window is
   frameless; the menu bar is hidden but every accelerator still works (Ctrl instead of Cmd).
-- A link opened from another app launches `mira <url>`: the new process hands the url to the
+- A link opened from another app launches `mira-browser <url>` (the executable is not `mira`,
+  which stays the CLI): the new process hands the url to the
   running Mira over the control socket, raises its window and exits.
 - `import-cookies` reads `~/.config/google-chrome` and the key Chrome keeps in libsecret or KWallet.
 

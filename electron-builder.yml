@@ -103,7 +103,8 @@ linux:
   target:
     - deb
     - AppImage
-  executableName: mira
+  # Not "mira": that name belongs to the CLI (bin/mira), which agents expect on the PATH.
+  executableName: mira-browser
   maintainer: ddaydd <ddaydd@users.noreply.github.com>
   category: Network;WebBrowser
   # Register as a web browser so KDE/GNOME list Mira in the default-browser picker.
