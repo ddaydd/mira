@@ -819,7 +819,9 @@ export class ProfileManager {
   private checker(): UpdateChecker {
     if (!this.updateChecker) {
       this.updateChecker = createUpdateChecker()
-      startUpdateSchedule(this.updateChecker)
+      // Releases only ship mac zips, so the daily notice would point a Linux
+      // build at downloads it cannot install. The menu check still works.
+      if (process.platform === 'darwin') startUpdateSchedule(this.updateChecker)
     }
     return this.updateChecker
   }

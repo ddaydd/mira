@@ -13,8 +13,8 @@ import { join } from 'node:path'
 import { type CommandMap, fail } from './registry'
 import type { CommandContext } from './context'
 import {
-  deriveKey,
-  decryptValue,
+  chromeKeys,
+  decryptWithKeys,
   rowToSetDetails,
   readSafeStorageKey,
   readCookieRows,
@@ -70,14 +70,17 @@ export interface ImportCookiesParams {
   to: string
   /** Chrome profile directory to import FROM (e.g. "Default", "Profile 1"). */
   profileDir: string
-  /** Chrome User Data dir; defaults to the standard macOS location. */
+  /** Chrome User Data dir; defaults to the platform's standard location. */
   userDataDir?: string
   /** Keychain service holding the key; defaults to "Chrome Safe Storage". */
   safeStorageService?: string
 }
 
-/** Standard macOS Chrome User Data directory. */
-const DEFAULT_CHROME_DIR = join(homedir(), 'Library', 'Application Support', 'Google', 'Chrome')
+/** Standard Chrome User Data directory (macOS, else Linux). */
+const DEFAULT_CHROME_DIR =
+  process.platform === 'darwin'
+    ? join(homedir(), 'Library', 'Application Support', 'Google', 'Chrome')
+    : join(homedir(), '.config', 'google-chrome')
 
 export const cookieCommands: CommandMap<CommandContext> = {
   'import-cookies': async (ctx, params) => {
@@ -87,7 +90,7 @@ export const cookieCommands: CommandMap<CommandContext> = {
     }
     try {
       const jar = ctx.cookieJarForProfile(p.to)
-      const key = deriveKey(readSafeStorageKey(p.safeStorageService))
+      const keys = chromeKeys(process.platform, readSafeStorageKey(p.safeStorageService))
       const dbPath = join(p.userDataDir ?? DEFAULT_CHROME_DIR, p.profileDir, 'Cookies')
       const rows = readCookieRows(dbPath)
 
@@ -97,7 +100,7 @@ export const cookieCommands: CommandMap<CommandContext> = {
       for (const row of rows) {
         try {
           const value = row.encrypted_hex
-            ? decryptValue(key, Buffer.from(row.encrypted_hex, 'hex'))
+            ? decryptWithKeys(keys, Buffer.from(row.encrypted_hex, 'hex'))
             : row.value
           await jar.set(rowToSetDetails(row, value))
           imported++

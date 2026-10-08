@@ -1,5 +1,9 @@
 // Importing cookies from a Chromium-based browser (Chrome) into a Mira session.
 //
+// Linux Chromium uses the same CBC scheme with two differences: 1 PBKDF2 round
+// instead of 1003, and two prefixes — "v11" is keyed by the password Chrome keeps
+// in the desktop keyring (libsecret or KWallet), "v10" by the fixed "peanuts".
+//
 // macOS Chromium encrypts each cookie's value with AES-128-CBC. The key is
 // PBKDF2(SHA-1, salt="saltysalt", 1003 rounds, 16 bytes) over the app's Keychain
 // "<App> Safe Storage" password; the stored blob is prefixed with "v10". Recent
@@ -13,13 +17,17 @@
 // a hardened, app-bound encryption that this (standard) path cannot read.
 
 import { pbkdf2Sync, createDecipheriv } from 'node:crypto'
-import { execFileSync } from 'node:child_process'
+import { execFileSync, type ExecFileSyncOptionsWithStringEncoding } from 'node:child_process'
 import { copyFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 const SALT = 'saltysalt'
 const ITERATIONS = 1003
+/** Linux Chromium derives its key with a single PBKDF2 round. */
+export const LINUX_ITERATIONS = 1
+/** The password Linux Chromium falls back to for "v10" blobs (no keyring). */
+export const LINUX_V10_PASSWORD = 'peanuts'
 const KEY_LENGTH = 16
 const IV = Buffer.alloc(16, 0x20) // 16 spaces
 const DOMAIN_HASH_LENGTH = 32
@@ -27,15 +35,36 @@ const DOMAIN_HASH_LENGTH = 32
 const CHROME_EPOCH_OFFSET_MICROS = 11644473600000000
 
 /** Derive the AES key from a "… Safe Storage" Keychain password. */
-export function deriveKey(safeStoragePassword: string): Buffer {
-  return pbkdf2Sync(safeStoragePassword, SALT, ITERATIONS, KEY_LENGTH, 'sha1')
+export function deriveKey(safeStoragePassword: string, iterations = ITERATIONS): Buffer {
+  return pbkdf2Sync(safeStoragePassword, SALT, iterations, KEY_LENGTH, 'sha1')
+}
+
+/** The key for each blob prefix. macOS only ever writes "v10"; Linux writes
+ * "v11" when it has a keyring password and "v10" (peanuts) when it does not. */
+export type ChromeKeys = Partial<Record<'v10' | 'v11', Buffer>>
+
+export function chromeKeys(platform: string, safeStoragePassword: string): ChromeKeys {
+  if (platform !== 'linux') return { v10: deriveKey(safeStoragePassword) }
+  return {
+    v10: deriveKey(LINUX_V10_PASSWORD, LINUX_ITERATIONS),
+    ...(safeStoragePassword ? { v11: deriveKey(safeStoragePassword, LINUX_ITERATIONS) } : {})
+  }
+}
+
+/** Decrypt a blob with the key its prefix calls for. */
+export function decryptWithKeys(keys: ChromeKeys, encrypted: Buffer): string {
+  const prefix = encrypted.subarray(0, 3).toString('latin1')
+  const key = prefix === 'v10' || prefix === 'v11' ? keys[prefix] : undefined
+  if (!key) throw new Error(`unsupported cookie encryption prefix: ${prefix}`)
+  return decryptValue(key, encrypted)
 }
 
 /** Decrypt one Chrome `encrypted_value` blob to its cleartext cookie value.
  * Throws if the blob is not the expected "v10" CBC form. */
 export function decryptValue(key: Buffer, encrypted: Buffer): string {
   const prefix = encrypted.subarray(0, 3).toString('latin1')
-  if (prefix !== 'v10') throw new Error(`unsupported cookie encryption prefix: ${prefix}`)
+  if (prefix !== 'v10' && prefix !== 'v11')
+    throw new Error(`unsupported cookie encryption prefix: ${prefix}`)
   const decipher = createDecipheriv('aes-128-cbc', key, IV)
   decipher.setAutoPadding(false)
   const padded = Buffer.concat([decipher.update(encrypted.subarray(3)), decipher.final()])
@@ -127,11 +156,41 @@ export function rowToSetDetails(row: ChromeCookieRow, value: string): CookieSetD
 // --- Thin I/O helpers (not unit-tested; exercised by the import-cookies command) ---
 
 /** Read a browser's "… Safe Storage" key from the login Keychain. The first read
- * pops a one-time macOS authorization prompt. */
+ * pops a one-time macOS authorization prompt. On Linux, read it from libsecret,
+ * then KWallet; '' when neither has it (Chrome then only wrote "v10" blobs). */
 export function readSafeStorageKey(service = 'Chrome Safe Storage'): string {
+  if (process.platform === 'linux') return readLinuxSafeStorageKey(service)
   return execFileSync('security', ['find-generic-password', '-w', '-s', service], {
     encoding: 'utf8'
   }).trim()
+}
+
+/** "Chrome Safe Storage" → "chrome", the `application` attribute libsecret uses. */
+export function libsecretApplication(service: string): string {
+  return service.replace(/ Safe Storage$/, '').toLowerCase()
+}
+
+function readLinuxSafeStorageKey(service: string): string {
+  const quiet: ExecFileSyncOptionsWithStringEncoding = {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'ignore']
+  }
+  try {
+    const key = execFileSync(
+      'secret-tool',
+      ['lookup', 'application', libsecretApplication(service)],
+      quiet
+    ).trim()
+    if (key) return key
+  } catch {
+    // no libsecret entry (or no secret-tool): try KWallet
+  }
+  try {
+    const folder = service.replace(/ Safe Storage$/, ' Keys')
+    return execFileSync('kwallet-query', ['-r', service, '-f', folder, 'kdewallet'], quiet).trim()
+  } catch {
+    return ''
+  }
 }
 
 const FIELD = '\x1f'

@@ -68,6 +68,29 @@ Apple, so macOS opens them without a warning (1.3.1 and earlier are not: allow t
 Settings → Privacy & Security, or run `xattr -dr com.apple.quarantine /Applications/Mira.app`).
 Mira then updates itself. Details, and how to build your own: [`docs/releases.md`](./docs/releases.md).
 
+### Linux
+
+No published build: package your own with `npm run build:linux`, which writes a `.deb` and an
+AppImage to `dist/`. Prefer the `.deb` (`sudo apt install ./dist/mira_<version>_amd64.deb`): it
+makes `chrome-sandbox` setuid root, which Chromium needs on Ubuntu (unprivileged user namespaces
+are restricted there), and registers Mira as a candidate default browser. Linux builds do not
+update themselves.
+
+What differs from macOS:
+
+- The three native addons (`native/`, Spaces, CoreLocation, activation) are macOS-only and simply
+  absent; what depends on them degrades to a no-op (e.g. `list-spaces` returns no displays).
+- Settings, Check for Updates and Quit live in the File menu (no app menu). The window is
+  frameless; the menu bar is hidden but every accelerator still works (Ctrl instead of Cmd).
+- A link opened from another app launches `mira <url>`: the new process hands the url to the
+  running Mira over the control socket, raises its window and exits.
+- `import-cookies` reads `~/.config/google-chrome` and the key Chrome keeps in libsecret or KWallet.
+
+In dev, `npm run dev` dies at launch until the bundled sandbox helper is root-owned:
+`sudo chown root:root node_modules/electron/dist/chrome-sandbox && sudo chmod 4755 node_modules/electron/dist/chrome-sandbox`
+(again after each Electron upgrade). A packaged Mira already running owns `/tmp/mira.sock`: give
+the dev one its own with `MIRA_SOCKET=/tmp/mira-dev.sock npm run dev`, or it hands over and exits.
+
 ## Development
 
 ```bash

@@ -16,19 +16,6 @@ directories:
 files:
   - 'out/**/*'
   - 'resources/**/*'
-# Ship the compiled macOS location addon into Contents/Resources so the main
-# process loads it by absolute path (see src/main/mac-location.ts). It is a signed
-# nested Mach-O; electron-builder re-signs it with the app's certificate.
-extraResources:
-  - from: native/mira-location/build/Release/mira_location.node
-    to: mira_location.node
-  # Same deal for the Spaces addon (macOS virtual desktops, see src/main/spaces.ts).
-  - from: native/mira-spaces/build/Release/mira_spaces.node
-    to: mira_spaces.node
-  # Same deal for the activation addon (suppress background reload foregrounding,
-  # see src/main/mac-activation.ts).
-  - from: native/mira-activation/build/Release/mira_activation.node
-    to: mira_activation.node
 asarUnpack:
   - resources/**
 # Declare Mira a handler for local HTML files so `open foo.html` (and a
@@ -55,6 +42,19 @@ nsis:
   uninstallDisplayName: ${productName}
   createDesktopShortcut: always
 mac:
+  # Ship the compiled macOS location addon into Contents/Resources so the main
+  # process loads it by absolute path (see src/main/mac-location.ts). It is a signed
+  # nested Mach-O; electron-builder re-signs it with the app's certificate.
+  extraResources:
+    - from: native/mira-location/build/Release/mira_location.node
+      to: mira_location.node
+    # Same deal for the Spaces addon (macOS virtual desktops, see src/main/spaces.ts).
+    - from: native/mira-spaces/build/Release/mira_spaces.node
+      to: mira_spaces.node
+    # Same deal for the activation addon (suppress background reload foregrounding,
+    # see src/main/mac-activation.ts).
+    - from: native/mira-activation/build/Release/mira_activation.node
+      to: mira_activation.node
   # Developer ID signing, the same certificate and profile as the published release
   # (bin/release-build.cjs). Only an app with an embedded provisioning profile can carry
   # the AMFI-restricted keychain-access-groups entitlement (WebAuthn Touch ID, see
@@ -97,12 +97,22 @@ mac:
 dmg:
   artifactName: ${name}-${version}.${ext}
 linux:
+  # deb first: its postinst makes chrome-sandbox setuid root, which an AppImage
+  # cannot do (it then dies at launch on Ubuntu, or needs --no-sandbox).
   target:
-    - AppImage
-    - snap
     - deb
-  maintainer: electronjs.org
-  category: Utility
+    - AppImage
+  executableName: mira
+  maintainer: ddaydd <ddaydd@users.noreply.github.com>
+  category: Network;WebBrowser
+  # Register as a web browser so KDE/GNOME list Mira in the default-browser picker.
+  mimeTypes:
+    - x-scheme-handler/http
+    - x-scheme-handler/https
+    - text/html
+  desktop:
+    entry:
+      StartupWMClass: Mira
 appImage:
   artifactName: ${name}-${version}.${ext}
 npmRebuild: false

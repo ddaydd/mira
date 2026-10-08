@@ -3,7 +3,29 @@ import { createServer, type Server } from 'net'
 import { existsSync, unlinkSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
-import { forwardRequest, forwardToRunningInstance } from './single-instance'
+import { forwardRequest, forwardToRunningInstance, urlsFromArgv } from './single-instance'
+
+describe('urlsFromArgv', () => {
+  it('keeps web and file urls, skips the executable, the app path and flags', () => {
+    expect(
+      urlsFromArgv(
+        ['.', '--no-sandbox', 'https://example.com/a?b=1', 'http://x.test', 'file:///tmp/a.html'],
+        '/home/me'
+      )
+    ).toEqual(['https://example.com/a?b=1', 'http://x.test', 'file:///tmp/a.html'])
+  })
+
+  it('turns an .html path into a file url, relative ones against cwd', () => {
+    expect(urlsFromArgv(['/tmp/page.html', 'docs/index.htm'], '/home/me')).toEqual([
+      'file:///tmp/page.html',
+      'file:///home/me/docs/index.htm'
+    ])
+  })
+
+  it('ignores a --profile value and anything that is not a page', () => {
+    expect(urlsFromArgv(['--profile', 'work', 'notes.txt'], '/home/me')).toEqual([])
+  })
+})
 
 describe('forwardRequest', () => {
   it('builds an open-url command line for a queued url', () => {
@@ -86,6 +108,28 @@ describe('forwardToRunningInstance', () => {
         params: { url: 'https://example.com' }
       }
     ])
+  })
+
+  it('raises the running instance on a url-less handoff when asked', async () => {
+    const path = socketPath()
+    const received: string[] = []
+    await startFakePrimary(path, received)
+
+    expect(await forwardToRunningInstance(path, [], undefined, true)).toBe(true)
+    expect(received.map((l) => JSON.parse(l))).toEqual([
+      { client: 'mira-second-instance', command: 'focus-app' }
+    ])
+  })
+
+  it('opens the urls before raising the window', async () => {
+    const path = socketPath()
+    const received: string[] = []
+    await startFakePrimary(path, received)
+
+    expect(await forwardToRunningInstance(path, ['https://example.com'], undefined, true)).toBe(
+      true
+    )
+    expect(received.map((l) => JSON.parse(l).command)).toEqual(['open-url', 'focus-app'])
   })
 
   it('times out to false when a connected primary never replies', async () => {

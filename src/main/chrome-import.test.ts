@@ -3,6 +3,11 @@ import { createCipheriv, randomBytes } from 'node:crypto'
 import {
   deriveKey,
   decryptValue,
+  chromeKeys,
+  decryptWithKeys,
+  libsecretApplication,
+  LINUX_ITERATIONS,
+  LINUX_V10_PASSWORD,
   sameSite,
   expiryToUnixSeconds,
   cookieUrl,
@@ -13,7 +18,7 @@ import {
 /** Encrypt a value the way macOS Chrome does, so decryptValue can be tested
  * against a known plaintext without touching a real cookie DB: 32-byte domain
  * hash prefix + value, PKCS#7-padded, AES-128-CBC, "v10" prefix. */
-function encryptLikeChrome(key: Buffer, value: string): Buffer {
+function encryptLikeChrome(key: Buffer, value: string, prefix = 'v10'): Buffer {
   const domainHash = randomBytes(32)
   const plain = Buffer.concat([domainHash, Buffer.from(value, 'utf8')])
   // PKCS#7: pad length is 1..16 (a full block when already aligned), byte = length.
@@ -22,7 +27,7 @@ function encryptLikeChrome(key: Buffer, value: string): Buffer {
   const cipher = createCipheriv('aes-128-cbc', key, Buffer.alloc(16, 0x20))
   cipher.setAutoPadding(false)
   const body = Buffer.concat([cipher.update(padded), cipher.final()])
-  return Buffer.concat([Buffer.from('v10'), body])
+  return Buffer.concat([Buffer.from(prefix), body])
 }
 
 describe('decryptValue', () => {
@@ -39,8 +44,38 @@ describe('decryptValue', () => {
     expect(decryptValue(key, blob)).toBe('sixteencharvalue')
   })
 
-  it('throws on a non-v10 blob', () => {
-    expect(() => decryptValue(key, Buffer.from('v11garbage'))).toThrow(/unsupported/)
+  it('throws on an unknown prefix', () => {
+    expect(() => decryptValue(key, Buffer.from('v12garbage'))).toThrow(/unsupported/)
+  })
+})
+
+describe('Linux Chrome keys', () => {
+  it('decrypts a v11 blob with the keyring password (1 round)', () => {
+    const keys = chromeKeys('linux', 'keyring-pw')
+    const blob = encryptLikeChrome(deriveKey('keyring-pw', LINUX_ITERATIONS), 'tok', 'v11')
+    expect(decryptWithKeys(keys, blob)).toBe('tok')
+  })
+
+  it('decrypts a v10 blob with the fixed peanuts password', () => {
+    const keys = chromeKeys('linux', 'keyring-pw')
+    const blob = encryptLikeChrome(deriveKey(LINUX_V10_PASSWORD, LINUX_ITERATIONS), 'tok')
+    expect(decryptWithKeys(keys, blob)).toBe('tok')
+  })
+
+  it('refuses a v11 blob when the keyring gave no password', () => {
+    const blob = encryptLikeChrome(deriveKey('x', LINUX_ITERATIONS), 'tok', 'v11')
+    expect(() => decryptWithKeys(chromeKeys('linux', ''), blob)).toThrow(/unsupported/)
+  })
+
+  it('keeps the macOS key (1003 rounds, v10 only) off Linux', () => {
+    const keys = chromeKeys('darwin', 'pw')
+    expect(keys.v11).toBeUndefined()
+    expect(decryptWithKeys(keys, encryptLikeChrome(deriveKey('pw'), 'tok'))).toBe('tok')
+  })
+
+  it('maps a Safe Storage service to its libsecret application', () => {
+    expect(libsecretApplication('Chrome Safe Storage')).toBe('chrome')
+    expect(libsecretApplication('Chromium Safe Storage')).toBe('chromium')
   })
 })
 

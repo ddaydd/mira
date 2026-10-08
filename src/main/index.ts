@@ -13,7 +13,7 @@ import { createCommandRegistry, type CommandContext } from './commands'
 import { startCommandSocket, cleanupSocket, type CommandSocketHandle } from './socket'
 import { FocusFeed } from './focus-feed'
 import { formatCommandEntry, lastCommand } from './command-log'
-import { forwardToRunningInstance } from './single-instance'
+import { forwardToRunningInstance, urlsFromArgv } from './single-instance'
 import { ProfileManager, DEFAULT_PROFILE_ID } from './profiles'
 import { CHROME_PARTITION, DEFAULT_SESSION_ALIAS } from './chrome-session'
 import { ExtensionsService } from './extensions'
@@ -69,6 +69,10 @@ let commandSocket: CommandSocketHandle | null = null
 // macOS to route links here at all.
 let manager: ProfileManager | null = null
 const pendingUrls: string[] = []
+// Linux has no 'open-url' / 'open-file': the desktop launches `mira <url>`, so
+// the targets come in argv and join the same queue.
+if (process.platform === 'linux')
+  pendingUrls.push(...urlsFromArgv(process.argv.slice(1), process.cwd()))
 app.on('open-url', (event, url) => {
   event.preventDefault()
   if (manager) manager.openUrl(url)
@@ -211,8 +215,19 @@ app.whenReady().then(async () => {
   // Mira already answers on the socket, forward it there and quit before creating any
   // window — the page opens in the running instance, no second Mira. A manual launch
   // (no queued url) is unaffected and boots normally as the primary.
-  if (pendingUrls.length > 0) {
-    const forwarded = await forwardToRunningInstance(SOCKET_PATH, pendingUrls)
+  // On Linux a plain relaunch (the launcher icon clicked again) must not boot a
+  // second Mira on the same socket either: it raises the running one instead, as
+  // does a forwarded link — nothing else would bring that window to the front.
+  // A forced profile (--profile / MIRA_PROFILE) still boots on its own.
+  const raiseOnHandoff =
+    process.platform === 'linux' && parseProfileArg(process.argv, process.env) === null
+  if (pendingUrls.length > 0 || raiseOnHandoff) {
+    const forwarded = await forwardToRunningInstance(
+      SOCKET_PATH,
+      pendingUrls,
+      undefined,
+      raiseOnHandoff
+    )
     if (forwarded) {
       pendingUrls.length = 0
       // A boot that exists only to hand its urls over: no window, nobody to ask.
@@ -851,7 +866,10 @@ app.on('window-all-closed', () => {
 app.on('will-quit', () => {
   globalShortcut.unregisterAll()
   // Stop the watchdog first, or it would re-bind the file cleanupSocket removes.
-  commandSocket?.close()
+  // A boot that only handed its urls to a running Mira never bound the socket:
+  // the file is that Mira's, and unlinking it would cut its control channel.
+  if (!commandSocket) return
+  commandSocket.close()
   cleanupSocket(SOCKET_PATH)
 })
 

@@ -347,6 +347,19 @@ export function appMenuTemplate(handlers: AppMenuHandlers): MenuItemConstructorO
     ]
   }
 
+  // Off mac there is no app menu: its items (Settings, Check for Updates, Quit)
+  // would vanish, and with them the Cmd+, / Cmd+Q accelerators. Append them to
+  // File instead, where Linux and Windows apps conventionally keep them.
+  if (!isMac && Array.isArray(fileMenu.submenu)) {
+    fileMenu.submenu.push(
+      { type: 'separator' },
+      settingsItem,
+      { label: 'Check for Updates…', click: () => handlers.checkForUpdates() },
+      { type: 'separator' },
+      { role: 'quit', accelerator: 'CmdOrCtrl+Q' }
+    )
+  }
+
   const template: MenuItemConstructorOptions[] = [
     ...(isMac ? [macAppMenu] : []),
     fileMenu,

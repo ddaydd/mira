@@ -16,6 +16,30 @@
 // split out so it is unit-testable without any I/O.
 
 import { connect } from 'net'
+import { isAbsolute, resolve } from 'path'
+import { pathToFileURL } from 'url'
+
+/** The links / files a Linux launch was asked to open. Linux has no 'open-url'
+ * or 'open-file' event: the desktop runs `mira <url-or-path>` and the target
+ * lands in argv. Keeps web/file urls and .html paths (resolved against `cwd`),
+ * skips flags, the executable and anything else. */
+export function urlsFromArgv(argv: readonly string[], cwd: string): string[] {
+  const urls: string[] = []
+  for (const arg of argv) {
+    if (/^(https?|file):/i.test(arg)) urls.push(arg)
+    else if (!arg.startsWith('-') && /\.html?$/i.test(arg)) {
+      urls.push(pathToFileURL(isAbsolute(arg) ? arg : resolve(cwd, arg)).href)
+    }
+  }
+  return urls
+}
+
+/** The socket line that brings the running Mira to the front. Only sent on a
+ * user-initiated handoff (a clicked link, a relaunch): on Linux nothing else
+ * raises the window, unlike macOS where the OS activates the app it routes to. */
+export function raiseRequest(): string {
+  return JSON.stringify({ client: 'mira-second-instance', command: 'focus-app' })
+}
 
 /** The socket line that hands one queued url to a running Mira. */
 export function forwardRequest(url: string): string {
@@ -34,9 +58,11 @@ export function forwardRequest(url: string): string {
 export function forwardToRunningInstance(
   socketPath: string,
   urls: string[],
-  timeoutMs = 2000
+  timeoutMs = 2000,
+  raise = false
 ): Promise<boolean> {
-  if (urls.length === 0) return Promise.resolve(false)
+  if (urls.length === 0 && !raise) return Promise.resolve(false)
+  const lines = [...urls.map(forwardRequest), ...(raise ? [raiseRequest()] : [])]
 
   return new Promise((resolve) => {
     const conn = connect(socketPath)
@@ -57,7 +83,7 @@ export function forwardToRunningInstance(
     conn.on('error', () => finish(false))
 
     conn.on('connect', () => {
-      for (const url of urls) conn.write(forwardRequest(url) + '\n')
+      for (const line of lines) conn.write(line + '\n')
     })
 
     // Wait for one response line per url, then we know they all landed and quit.
@@ -69,7 +95,7 @@ export function forwardToRunningInstance(
       while ((idx = buffer.indexOf('\n')) >= 0) {
         buffer = buffer.slice(idx + 1)
         replies += 1
-        if (replies >= urls.length) finish(true)
+        if (replies >= lines.length) finish(true)
       }
     })
   })
