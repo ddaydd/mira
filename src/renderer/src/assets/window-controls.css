@@ -1,0 +1,33 @@
+/* ---- Window buttons (minimize / maximize / close), off macOS only ---------- */
+
+.window-controls {
+  -webkit-app-region: no-drag;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 4px;
+}
+
+.window-control {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.window-control:hover {
+  background: var(--color-background-mute);
+}
+
+.window-control-close:hover {
+  background: var(--color-danger);
+  color: var(--color-background);
+}

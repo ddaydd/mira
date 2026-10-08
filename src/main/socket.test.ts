@@ -196,6 +196,7 @@ function setup(): {
       windowId: 'w1',
       maximized: maximized ?? false
     }),
+    minimizeWindow: () => ({ windowId: 'w1' }),
     closeWindow: () => ({ windowId: 'w1', closed: true }),
     sessionWindow: async () => ({ windowId: 'w1', tabId: null, created: false }),
     findSessionWindow: () => null,

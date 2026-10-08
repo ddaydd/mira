@@ -30,6 +30,8 @@ export interface WindowStateContext {
     maximized?: boolean,
     windowId?: string
   ) => Promise<{ windowId: string; maximized: boolean }>
+  /** Minimize (iconify) the window. Throws on an unknown windowId. */
+  minimizeWindow: (windowId?: string) => { windowId: string }
 }
 
 interface FullScreenParams {
@@ -67,6 +69,17 @@ export const windowStateCommands: CommandMap<CommandContext> = {
           optionalWindowId(p.windowId)
         ))
       }
+    } catch (error) {
+      return fail(error)
+    }
+  },
+
+  // The ─ window button on Linux/Windows, where the frameless window has none of
+  // its own. Not a toggle: the window comes back through the taskbar.
+  'minimize-window': (ctx, params) => {
+    const p = (params ?? {}) as { windowId?: unknown }
+    try {
+      return { ok: true, ...ctx.minimizeWindow(optionalWindowId(p.windowId)) }
     } catch (error) {
       return fail(error)
     }

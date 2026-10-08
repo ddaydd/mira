@@ -67,3 +67,25 @@ describe('set-window-maximized', () => {
     expect(windowInfo(ctx).maximized).toBe(false)
   })
 })
+
+describe('minimize-window', () => {
+  it('minimizes the target window', () => {
+    const { ctx } = makeContext()
+    expect(createCommandRegistry().execute('minimize-window', {}, ctx)).toEqual({
+      ok: true,
+      windowId: 'fake-window'
+    })
+  })
+
+  it('reports an unknown or malformed windowId', () => {
+    const { ctx } = makeContext()
+    const registry = createCommandRegistry()
+    expect(registry.execute('minimize-window', { windowId: 'nope' }, ctx)).toMatchObject({
+      ok: false
+    })
+    expect(registry.execute('minimize-window', { windowId: ' ' }, ctx)).toEqual({
+      ok: false,
+      error: '"windowId" must be a non-empty string'
+    })
+  })
+})

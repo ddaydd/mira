@@ -8,6 +8,7 @@ import ResizeHandle from './ResizeHandle'
 import ExtensionActions from './features/extensions/ExtensionActions'
 import AppMenuButton from './features/app-menu/AppMenuButton'
 import BookmarksBar from './features/bookmarks-bar/BookmarksBar'
+import WindowControls from './features/window-controls/WindowControls'
 import FindBar from './features/find/FindBar'
 import MediaGallery from './features/media/MediaGallery'
 import { ReloadSpinner } from './features/loading/ReloadSpinner'
@@ -626,6 +627,7 @@ function App(): React.JSX.Element {
             Mira <span className="toolbar-drag-version">{__APP_VERSION__}</span>
           </div>
           <AppMenuButton />
+          <WindowControls />
         </div>
       )}
       {showBookmarksBar && <BookmarksBar tree={bookmarks} />}

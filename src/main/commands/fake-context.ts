@@ -1530,6 +1530,11 @@ export function makeContext(
       if (windowState.fullScreen) windowState.maximized = false
       return { windowId: id, fullScreen: windowState.fullScreen }
     },
+    minimizeWindow: (windowId?: string) => {
+      const id = windowId ?? 'fake-window'
+      if (id !== 'fake-window') throw new Error(`unknown window: ${id}`)
+      return { windowId: id }
+    },
     setWindowMaximized: async (maximized?: boolean, windowId?: string) => {
       const id = windowId ?? 'fake-window'
       if (id !== 'fake-window') throw new Error(`unknown window: ${id}`)

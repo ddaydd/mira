@@ -6806,6 +6806,11 @@ export class ProfileManager {
           maximized: await this.setWindowMaximizedIn(pw, maximized)
         }
       },
+      minimizeWindow: (windowId) => {
+        const pw = this.windowFor(target, windowId)
+        pw.window.minimize()
+        return { windowId: pw.windowId }
+      },
       // A menu/UI close is a user close (the last window quits Mira, through the
       // confirmation gate); a socket/MCP close never quits (foreground-policy's
       // origin, same rule as close-profile — agents use `quit` for that).
