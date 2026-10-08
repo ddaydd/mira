@@ -197,6 +197,9 @@ function setup(): {
       maximized: maximized ?? false
     }),
     minimizeWindow: () => ({ windowId: 'w1' }),
+    uiState: () => {
+      throw new Error('unused')
+    },
     closeWindow: () => ({ windowId: 'w1', closed: true }),
     sessionWindow: async () => ({ windowId: 'w1', tabId: null, created: false }),
     findSessionWindow: () => null,

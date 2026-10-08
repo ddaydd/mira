@@ -56,6 +56,7 @@ import { tabMemoryCommands } from './tab-memory'
 import { tabMenuCommands } from './tab-menu'
 import { appMenuCommands } from './app-menu'
 import { bookmarksBarCommands } from './bookmarks-bar'
+import { uiStateCommands } from './ui-state'
 import { tabTidyCommands } from './tab-tidy'
 import { tabTopCommands } from './tab-top'
 import { tabsCommands } from './tabs'
@@ -173,6 +174,7 @@ export type { TabDetachContext, WindowInfo } from './tab-detach'
 export type { TabMenuContext } from './tab-menu'
 export type { AppMenuContext } from './app-menu'
 export type { BookmarksBarContext } from './bookmarks-bar'
+export type { UiStateContext } from './ui-state'
 export { estimateMenuWidth, rightAlignedX } from './app-menu'
 export type { TabsContext, TabInfo, TabKind } from './tabs'
 export type { ThemeContext } from './themes'
@@ -260,6 +262,7 @@ export function createCommandRegistry(): CommandRegistry {
     ...tabMenuCommands,
     ...appMenuCommands,
     ...bookmarksBarCommands,
+    ...uiStateCommands,
     ...tabTidyCommands,
     ...tabTopCommands,
     ...tabsCommands,

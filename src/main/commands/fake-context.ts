@@ -1530,6 +1530,31 @@ export function makeContext(
       if (windowState.fullScreen) windowState.maximized = false
       return { windowId: id, fullScreen: windowState.fullScreen }
     },
+    uiState: (windowId?: string) => {
+      const id = windowId ?? 'fake-window'
+      if (id !== 'fake-window') throw new Error(`unknown window: ${id}`)
+      return {
+        windowId: id,
+        profileId: 'default',
+        focused: true,
+        maximized: windowState.maximized,
+        fullScreen: windowState.fullScreen,
+        minimized: false,
+        activeTab: null,
+        tabCount: state.tabs.tabs.length,
+        open: {
+          palette: false,
+          mediaGallery: false,
+          settings: false,
+          skillPane: false,
+          find: null,
+          htmlFullScreen: false
+        },
+        sidebar: true,
+        bookmarksBar: bookmarksBar.visible,
+        zen: false
+      }
+    },
     minimizeWindow: (windowId?: string) => {
       const id = windowId ?? 'fake-window'
       if (id !== 'fake-window') throw new Error(`unknown window: ${id}`)

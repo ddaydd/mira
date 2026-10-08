@@ -110,6 +110,7 @@ import { type LlmConfig, type ChatMessage, type PageContext } from './llm'
 import { LlmRunner } from './llm-runner'
 import { type BookmarkTree, importChromeTree, findNode as findBookmarkNode } from './bookmark-store'
 import { buildBookmarkMenu } from './bookmark-menu'
+import type { UiState } from './ui-state'
 import { defaultChromeUserDataDir } from './chrome-import'
 import { bookmarksMenuItems, topChromeHeight, type BookmarkMenuItem } from './bookmarks-bar'
 import { BookmarksController } from './bookmarks-controller'
@@ -4206,6 +4207,50 @@ export class ProfileManager {
     return pw
   }
 
+  /** What is on screen in one window (ui-state.ts). Without an id: the window
+   * the user is on — the focused one, else the last one they focused — so an
+   * agent's own session window never answers for them. */
+  private uiStateOf(windowId?: string): UiState {
+    const pw =
+      windowId !== undefined
+        ? this.windowFor(null, windowId)
+        : (this.findByWindow(BrowserWindow.getFocusedWindow()) ??
+          (this.lastFocusedWindowId ? this.openById.get(this.lastFocusedWindowId) : undefined))
+    if (!pw || pw.window.isDestroyed()) throw new Error('no open window')
+    const activeId = pw.state.activeId
+    const tab = pw.state.tabs.find((t) => t.id === activeId)
+    const settings = activeId !== null && activeId === pw.settingsTabId
+    return {
+      windowId: pw.windowId,
+      profileId: pw.id,
+      focused: pw.window.isFocused(),
+      maximized: pw.window.isMaximized(),
+      fullScreen: pw.window.isFullScreen(),
+      minimized: pw.window.isMinimized(),
+      activeTab:
+        tab && !settings
+          ? {
+              id: tab.id,
+              title: tab.title,
+              url: tab.url,
+              audible: this.liveContents(pw, tab.id)?.isCurrentlyAudible() === true
+            }
+          : null,
+      tabCount: pw.state.tabs.length,
+      open: {
+        palette: pw.paletteOpen,
+        mediaGallery: pw.mediaGalleryOpen,
+        settings,
+        skillPane: pw.skillPane.open,
+        find: pw.findText !== '' ? pw.findText : null,
+        htmlFullScreen: pw.htmlFullScreen !== null
+      },
+      sidebar: !pw.panelCollapsed,
+      bookmarksBar: this.appSettings.bookmarksBarVisible,
+      zen: pw.chromeHidden
+    }
+  }
+
   /** Enter / leave native fullscreen (default: toggle). Leaving restores the
    * window's normal rectangle, which Electron kept while it was fullscreen. The
    * new state is persisted like any other geometry change, so it does not come
@@ -4889,28 +4934,27 @@ export class ProfileManager {
     const node = findBookmarkNode(this.bookmarksFor(pw.id).get(), id)
     if (!node) throw new Error(`unknown bookmark: ${id}`)
     const chrome = pw.window.webContents
-    const template = buildBookmarkMenu(node).map(
-      (entry): MenuItemConstructorOptions =>
-        entry.type === 'separator'
-          ? { type: 'separator' }
-          : {
-              label: entry.label,
-              click: () => {
-                const run = (): void => this.deps.runCommand?.(chrome, entry.command, entry.params)
-                if (!entry.confirm) return run()
-                dialog
-                  .showMessageBox(pw.window, {
-                    type: 'warning',
-                    message: entry.confirm.message,
-                    detail: entry.confirm.detail,
-                    buttons: [entry.confirm.button, 'Cancel'],
-                    defaultId: 1,
-                    cancelId: 1
-                  })
-                  .then(({ response }) => response === 0 && run())
-                  .catch((error) => console.error('[mira] bookmark delete prompt', error))
-              }
+    const template = buildBookmarkMenu(node).map((entry): MenuItemConstructorOptions =>
+      entry.type === 'separator'
+        ? { type: 'separator' }
+        : {
+            label: entry.label,
+            click: () => {
+              const run = (): void => this.deps.runCommand?.(chrome, entry.command, entry.params)
+              if (!entry.confirm) return run()
+              dialog
+                .showMessageBox(pw.window, {
+                  type: 'warning',
+                  message: entry.confirm.message,
+                  detail: entry.confirm.detail,
+                  buttons: [entry.confirm.button, 'Cancel'],
+                  defaultId: 1,
+                  cancelId: 1
+                })
+                .then(({ response }) => response === 0 && run())
+                .catch((error) => console.error('[mira] bookmark delete prompt', error))
             }
+          }
     )
     Menu.buildFromTemplate(template).popup({ window: pw.window, ...at })
   }
@@ -6848,6 +6892,7 @@ export class ProfileManager {
           maximized: await this.setWindowMaximizedIn(pw, maximized)
         }
       },
+      uiState: (windowId) => this.uiStateOf(windowId),
       minimizeWindow: (windowId) => {
         const pw = this.windowFor(target, windowId)
         pw.window.minimize()
