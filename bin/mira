@@ -25,6 +25,7 @@
 //
 // Usage:
 //   mira tabs [--window <id>]       list tabs (id / title / url), * = active, z = asleep, ♪ = playing sound
+//   mira tabs --profile <p>         list the user's window of that profile (label or id prefix)
 //                                   (--window: any window from `mira windows`, else the focused one)
 //   mira tabs --session [--profile <p>]  list THIS Claude session's own window (never opens one)
 //   mira use --url <substr>         resolve a tab by url, print export MIRA_TAB=<id>
@@ -83,6 +84,7 @@ import {
   sessionTarget,
   sessionTabsTarget,
   matchProfileId,
+  profileWindow,
   pickTabByUrl,
   buildExec,
   buildReload,
@@ -419,6 +421,25 @@ async function main() {
     case 'tabs': {
       const req = { command: 'list-tabs' }
       if (typeof flags.window === 'string') req.params = { windowId: flags.window }
+      // --profile without --session: the user's window of that profile. Resolved
+      // here (list-windows), so it works on any running build.
+      if (typeof flags.profile === 'string' && flags.session !== true) {
+        if (typeof flags.window === 'string') return die('tabs: pass --window or --profile, not both', 2)
+        const profs = await call({ command: 'list-profiles' }, socketPath, timeoutMs).catch((e) =>
+          die(e.message, 2)
+        )
+        if (!profs.ok) return die(JSON.stringify(profs), 1)
+        const match = matchProfileId(profs.profiles, flags.profile)
+        if ('error' in match) return die(match.error, 2)
+        const wins = await call({ command: 'list-windows' }, socketPath, timeoutMs).catch((e) =>
+          die(e.message, 2)
+        )
+        if (!wins.ok) return die(JSON.stringify(wins), 1)
+        const label = profs.profiles.find((p) => p.id === match.id)?.label
+        const win = profileWindow(wins.windows, match.id, label)
+        if ('error' in win) return die(win.error, 2)
+        req.params = { windowId: win.windowId }
+      }
       if (flags.session === true) {
         const st = sessionTabsTarget({ flags, env: process.env })
         if ('error' in st) return die(st.error, 2)
