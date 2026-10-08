@@ -1,0 +1,11 @@
+/* Address-bar camera button (features/media-capture): red while the page
+   captures the camera/mic, like Chrome's recording dot; muted when blocked. */
+.media-capture-button svg {
+  display: block;
+}
+.media-capture-button.active {
+  color: var(--color-danger);
+}
+.media-capture-button.blocked {
+  opacity: 0.75;
+}

@@ -248,6 +248,8 @@ function setup(): {
       throw new Error('unused')
     },
     showAudioMenu: () => {},
+    showMediaCaptureMenu: () => {},
+    resetMediaCapture: () => {},
     listTabFolders: () => ({ folders: [] }),
     createTabFolder: () => ({ id: 'folder-1' }),
     renameTabFolder: () => ({ renamed: true }),

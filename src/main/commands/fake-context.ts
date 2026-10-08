@@ -1613,6 +1613,8 @@ export function makeContext(
     // Native audio drop-down (show-audio-menu): a no-op in tests — the item list is
     // covered by audio-menu.test.ts, so the command test only checks dispatch.
     showAudioMenu: () => {},
+    showMediaCaptureMenu: () => {},
+    resetMediaCapture: () => {},
     // Tab folders: real in-memory mutations so the tab-folders command tests can
     // observe them (mirrors ProfileManager, minus the native re-layout).
     listTabFolders: () => ({ folders: state.folders }),

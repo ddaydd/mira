@@ -197,6 +197,11 @@ import { buildPageMenu, imageUnderPointSource, needsImageProbe } from './page-me
 import { buildTabMenu, type TabMenuItem } from './tab-menu'
 import { formatTabCloseLog, type TabCloseReason } from './tab-close-log'
 import { buildAudioMenu, type AudioMenuItem } from './audio-menu'
+import {
+  buildMediaCaptureMenu,
+  MediaCaptureTracker,
+  type MediaCaptureInfo
+} from './media-capture-state'
 import { buildFolderMenu, type FolderMenuItem } from './folder-menu'
 import {
   addFolder as addFolderPure,
@@ -658,6 +663,9 @@ export class ProfileManager {
   /** The camera/mic picker wiring (getUserMedia shim preload + native picker),
    * shared across profile sessions. Lazily created so `app` is ready first. */
   private mediaPicker: MediaDevicePickerService | null = null
+  /** Camera/mic state per tab webContents, for the address-bar camera button
+   * (media-capture-state.ts). Fed by the picker service hooks. */
+  private readonly mediaCapture = new MediaCaptureTracker()
   /** Chromium content tracing. One recording at a time for the whole app (not
    * per profile) — that is Chromium's rule, see tracing.ts. Lazily created so
    * this.deps is set. */
@@ -2522,7 +2530,17 @@ export class ProfileManager {
     // Route this session's getUserMedia through Mira's native camera/mic picker
     // (Electron has no per-device hook, so the choice is made in-page — see
     // media-device-picker-service.ts). Once per session (guarded inside).
-    this.mediaPicker ??= new MediaDevicePickerService(app.getPath('userData'))
+    this.mediaPicker ??= new MediaDevicePickerService(app.getPath('userData'), {
+      onCapture: (wc, frameKey, capture) => {
+        this.mediaCapture.report(wc.id, frameKey, capture)
+        this.pushCaptureChange(wc)
+      },
+      onDenied: (wc) => {
+        this.mediaCapture.markBlocked(wc.id)
+        this.pushCaptureChange(wc)
+      },
+      consumeForcePick: (wc) => this.mediaCapture.consumeForcePick(wc.id)
+    })
     this.mediaPicker.attach(ses)
     ses.setPermissionCheckHandler((_wc, permission, requestingOrigin) => {
       const granted = shouldGrantPermission(permission)
@@ -2985,6 +3003,14 @@ export class ProfileManager {
     wc.on('did-navigate-in-page', (_e, navUrl, isMainFrame) => {
       if (isMainFrame) patch({ url: mirrorUrl(navUrl) })
     })
+    // A new document: the old one's camera/mic tracks died with it, and a block
+    // applied to that page only (media-capture-state.ts).
+    const wcId = wc.id
+    wc.on('did-navigate', () => {
+      const shown = this.mediaCapture.infoFor(wcId) !== null
+      this.mediaCapture.resetForNavigation(wcId)
+      if (shown) this.schedulePush(owner())
+    })
     // Keep a page that reloads ITSELF (dev-server HMR full reload, meta-refresh,
     // JS redirect) from dragging the whole app to the foreground on macOS. Chromium
     // re-focuses the renderer widget on the commit, which activates the app even
@@ -3059,6 +3085,7 @@ export class ProfileManager {
     // A tab closed or discarded mid-fullscreen never emits leave: restore then too.
     wc.on('destroyed', () => {
       const pw = owner()
+      this.mediaCapture.forget(wcId)
       if (pw.htmlFullScreen?.tabId === tabId) this.leaveHtmlFullScreenIn(pw)
       this.downloadDocSource.delete(tabId)
       this.errorRetryUrl.delete(tabId)
@@ -3342,8 +3369,55 @@ export class ProfileManager {
       // page. Drives the toolbar reload spinner. An asleep tab has no view, so it
       // is never loading. Refreshed by the did-start/did-stop-loading push.
       loading: this.liveContents(pw, t.id)?.isLoadingMainFrame() === true,
-      waking: this.wakingTabs.has(t.id)
+      waking: this.wakingTabs.has(t.id),
+      // Camera/mic in use or blocked on this page (address-bar camera button).
+      mediaCapture: this.mediaCaptureOf(pw, t.id)
     }))
+  }
+
+  /** A tab's camera/mic state, or null (asleep, or nothing to show). */
+  private mediaCaptureOf(pw: ProfileWindow, tabId: string): MediaCaptureInfo | null {
+    const wc = this.liveContents(pw, tabId)
+    return wc ? this.mediaCapture.infoFor(wc.id) : null
+  }
+
+  /** A tab's camera/mic state changed: refresh its window's strip. */
+  private pushCaptureChange(wc: WebContents): void {
+    const tabId = this.tabIdOfAnyWindow(wc)
+    const pw = tabId ? this.ownerOf(tabId) : null
+    if (pw) this.schedulePush(pw)
+  }
+
+  /** Pop the camera button's native menu for the window's active tab: devices in
+   * use (or blocked), and the reset action. Items from the pure, tested
+   * buildMediaCaptureMenu; command items route through the registry bus. */
+  private showMediaCaptureMenuIn(pw: ProfileWindow): void {
+    if (pw.window.isDestroyed()) return
+    const tabId = pw.state.activeId
+    if (!tabId) return
+    const chrome = pw.window.webContents
+    const items = buildMediaCaptureMenu(tabId, this.mediaCaptureOf(pw, tabId))
+    const template: MenuItemConstructorOptions[] = items.map((item) => {
+      if (item.type === 'separator') return { type: 'separator' }
+      if (item.type === 'disabled') return { label: item.label, enabled: false }
+      return {
+        label: item.label,
+        click: () => this.deps.runCommand?.(chrome, item.command, item.params)
+      }
+    })
+    Menu.buildFromTemplate(template).popup({ window: pw.window })
+  }
+
+  /** Clear a tab's camera/mic block, arm the picker for its next request (even if
+   * the page pins its own device) and reload it. */
+  private resetMediaCapture(tabId: string): void {
+    const pw = this.ownerOf(tabId)
+    if (!pw) throw new Error(`unknown tab: ${tabId}`)
+    const wc = this.liveContents(pw, tabId)
+    if (!wc) throw new Error('tab is asleep')
+    this.mediaCapture.armForcePick(wc.id)
+    this.schedulePush(pw)
+    this.reloadTab(tabId, false)
   }
 
   /** Push the current tab strip (tabs, active id, panel state) to the chrome so
@@ -6978,6 +7052,11 @@ export class ProfileManager {
         if (!target) throw new Error('no target window')
         this.showAudioMenuIn(target)
       },
+      showMediaCaptureMenu: () => {
+        if (!target) throw new Error('no target window')
+        this.showMediaCaptureMenuIn(target)
+      },
+      resetMediaCapture: (tabId) => this.resetMediaCapture(tabId),
       listTabFolders: () => ({ folders: target ? target.folders : [] }),
       createTabFolder: (title, tabId, edit) => {
         if (!target) throw new Error('no target window')

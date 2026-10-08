@@ -4,6 +4,7 @@
 // the native WebContentsView-per-tab and layout live behind this context slice,
 // implemented by the ProfileManager (src/main/profiles.ts).
 
+import type { MediaCaptureInfo } from '../media-capture-state'
 import { type CommandMap, type CommandResult, fail } from './registry'
 import { normalizeInput } from '../url'
 import type { CommandContext } from './context'
@@ -42,6 +43,10 @@ export interface TabInfo {
    * sidebar shows a speaker icon for it, and the toolbar audio button lists these
    * tabs. Always false for an asleep tab (no view to be audible). */
   audible: boolean
+  /** Camera/mic in use or blocked on this page (address-bar camera button), or
+   * null/absent when there is nothing to show. Live runtime state, see
+   * media-capture-state.ts. */
+  mediaCapture?: MediaCaptureInfo | null
   /** When the tab was opened, epoch ms, or null when unknown (a tab restored
    * from a session file written before tabs carried timestamps). Persisted, so it
    * survives restarts: a tab opened three weeks ago reports three weeks. */

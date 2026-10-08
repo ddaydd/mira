@@ -12,6 +12,7 @@ import WindowControls from './features/window-controls/WindowControls'
 import FindBar from './features/find/FindBar'
 import MediaGallery from './features/media/MediaGallery'
 import { ReloadSpinner } from './features/loading/ReloadSpinner'
+import MediaCaptureButton from './features/media-capture/MediaCaptureButton'
 import { WakingSpinner } from './features/loading/WakingSpinner'
 import { useRevealTab } from './features/reveal-tab/useRevealTab'
 import { applyTheme, initialTheme } from './features/profile-theme/profile-theme'
@@ -521,6 +522,9 @@ function App(): React.JSX.Element {
               autoCorrect="off"
             />
           </form>
+          {/* Camera/mic in use or blocked on the active tab (Chrome's address-bar
+            camera icon); a native menu to reset it (features/media-capture). */}
+          <MediaCaptureButton capture={tabs.find((t) => t.id === activeId)?.mediaCapture} />
           {/* Page-zoom toggle: arms/disarms the Cmd+scroll optical magnifier.
             Off by default (the gesture fires too easily while scrolling with Cmd
             held); optimistic flip, main persists via magnifier-set-enabled. */}

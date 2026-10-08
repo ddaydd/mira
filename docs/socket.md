@@ -534,6 +534,10 @@ mira call list-extensions   --params '{"profileId":"default"}'
 | ------------------------------------------------------------------------------------ | ------ | ---------------------------- |
 | `list-permissions` / `clear-permissions`                                             | —      | web-permission grant log     |
 | `location-auth-status` / `request-location-authorization` / `open-location-settings` | —      | macOS location authorization |
+| `show-media-capture-menu`                                                            | —      | pop the address-bar camera button's menu (active tab of the target window) |
+| `reset-media-capture`                                                                | `tabId` | clear the tab's camera/mic block (picker cancelled), force the device picker on its next request even if the page pins a device, and reload it. Errors: `unknown tab: <id>`, `tab is asleep` |
+
+A tab's camera/mic state rides `list-tabs` as `mediaCapture` (`{camera, microphone, blocked, cameraLabels, microphoneLabels}`, or `null`).
 
 ### Tracing (Chromium content trace, for stall forensics)
 

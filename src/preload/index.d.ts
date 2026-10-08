@@ -20,6 +20,15 @@ export interface TabInfo {
   /** Whether the tab's main frame is currently loading (live runtime flag).
    * Drives the toolbar reload spinner beside the address bar. */
   loading: boolean
+  /** Camera/mic in use or blocked on this page, or null/absent. Drives the
+   * address-bar camera button. */
+  mediaCapture?: {
+    camera: boolean
+    microphone: boolean
+    blocked: boolean
+    cameraLabels: string[]
+    microphoneLabels: string[]
+  } | null
 }
 
 /** A tab folder (metadata): the sidebar groups tabs by folderId; this carries the

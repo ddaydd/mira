@@ -1,3 +1,4 @@
+import type { TabInfo as PreloadTabInfo } from '../../preload/index.d'
 import { useRef, useState, type DragEvent } from 'react'
 import FolderHeader, { type TabFolder } from './features/tab-folders/FolderHeader'
 import {
@@ -37,6 +38,8 @@ export interface TabInfo {
   /** Just woken, not painted yet: main hides its view and the page area shows
    * a spinner (features/loading/WakingSpinner). */
   waking?: boolean
+  /** Camera/mic in use or blocked on this page (address-bar camera button). */
+  mediaCapture?: PreloadTabInfo['mediaCapture']
 }
 
 /** The speaker icon shown on a tab that is emitting sound. A monochrome inline

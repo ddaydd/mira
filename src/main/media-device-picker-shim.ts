@@ -15,6 +15,7 @@
 
 import type { MediaPickChoice } from './media-device-picker'
 import { MEDIA_PICK_IPC_CHANNEL } from './media-device-picker'
+import { MEDIA_CAPTURE_REPORT_CHANNEL, MEDIA_FORCE_PICK_CHANNEL } from './media-capture-state'
 
 /** Which kinds a getUserMedia constraints object asks for. A MediaStream
  * constraint is "wanted" when its value is truthy (true or a constraints
@@ -88,40 +89,82 @@ export const GUM_SHIM_MAIN_WORLD = `(bridge) => {
     base.deviceId = { exact: id };
     return base;
   };
+  // Capture tracking (camera button, media-capture-state.ts): every track a
+  // getUserMedia call hands out is watched until it ends or the page stops it,
+  // and the frame reports the labels still live. stop() fires no 'ended' event,
+  // hence the prototype hook.
+  var live = [];
+  var report = function () {
+    live = live.filter(function (t) { return t.readyState === 'live'; });
+    var video = [], audio = [];
+    live.forEach(function (t) { (t.kind === 'video' ? video : audio).push(t.label || ''); });
+    try { if (bridge.reportCapture) bridge.reportCapture({ video: video, audio: audio }); } catch (_) {}
+  };
+  var track = function (stream) {
+    try {
+      stream.getTracks().forEach(function (t) {
+        live.push(t);
+        t.addEventListener('ended', report);
+      });
+      report();
+    } catch (_) {}
+    return stream;
+  };
+  try {
+    var proto = window.MediaStreamTrack && MediaStreamTrack.prototype;
+    var origStop = proto && proto.stop;
+    if (origStop) {
+      proto.stop = function () {
+        var r = origStop.apply(this, arguments);
+        if (live.indexOf(this) >= 0) report();
+        return r;
+      };
+    }
+  } catch (_) {}
+  var capture = function (constraints) { return orig(constraints).then(track); };
   md.getUserMedia = function (constraints) {
     try {
       var c = constraints || {};
       var wantVideo = !!c.video, wantAudio = !!c.audio;
       if (!wantVideo && !wantAudio) return orig(constraints);
-      // Mirrors pageChoseDevices: the page pinned its devices itself, no picker.
+      var pick = function () {
+        return md.enumerateDevices().then(function (devices) {
+          var reduce = function (kind) {
+            return devices.filter(function (d) { return d.kind === kind; })
+              .map(function (d) { return { deviceId: d.deviceId, label: d.label, kind: d.kind }; });
+          };
+          var request = {
+            origin: location.origin,
+            wantVideo: wantVideo, wantAudio: wantAudio,
+            videoDevices: reduce('videoinput'),
+            audioDevices: reduce('audioinput')
+          };
+          return Promise.resolve(bridge.pickDevices(request)).then(function (choice) {
+            if (!choice) throw new DOMException('Permission denied by user', 'NotAllowedError');
+            var next = Object.assign({}, c);
+            if (wantVideo && choice.video) next.video = withDeviceId(c.video, choice.video);
+            if (wantAudio && choice.audio) next.audio = withDeviceId(c.audio, choice.audio);
+            return capture(next);
+          }, function (err) {
+            // IPC/bridge failure (NOT a user cancel) — do not block the user.
+            if (err && err.name === 'NotAllowedError') throw err;
+            return capture(constraints);
+          });
+        }, function () { return capture(constraints); });
+      };
+      // Mirrors pageChoseDevices: the page pinned its devices itself, no picker —
+      // unless the user asked to choose again from the camera button (forcePick).
       var pins = function (value) {
         var exact = value && typeof value === 'object' && value.deviceId && value.deviceId.exact;
         return Array.isArray(exact) ? exact.length > 0 : typeof exact === 'string' && exact !== '';
       };
-      if ((!wantVideo || pins(c.video)) && (!wantAudio || pins(c.audio))) return orig(constraints);
-      return md.enumerateDevices().then(function (devices) {
-        var reduce = function (kind) {
-          return devices.filter(function (d) { return d.kind === kind; })
-            .map(function (d) { return { deviceId: d.deviceId, label: d.label, kind: d.kind }; });
-        };
-        var request = {
-          origin: location.origin,
-          wantVideo: wantVideo, wantAudio: wantAudio,
-          videoDevices: reduce('videoinput'),
-          audioDevices: reduce('audioinput')
-        };
-        return Promise.resolve(bridge.pickDevices(request)).then(function (choice) {
-          if (!choice) throw new DOMException('Permission denied by user', 'NotAllowedError');
-          var next = Object.assign({}, c);
-          if (wantVideo && choice.video) next.video = withDeviceId(c.video, choice.video);
-          if (wantAudio && choice.audio) next.audio = withDeviceId(c.audio, choice.audio);
-          return orig(next);
-        }, function (err) {
-          // IPC/bridge failure (NOT a user cancel) — do not block the user.
-          if (err && err.name === 'NotAllowedError') throw err;
-          return orig(constraints);
-        });
-      }, function () { return orig(constraints); });
+      if ((!wantVideo || pins(c.video)) && (!wantAudio || pins(c.audio))) {
+        if (!bridge.forcePick) return capture(constraints);
+        return Promise.resolve(bridge.forcePick()).then(function (force) {
+          return force ? pick() : capture(constraints);
+        }, function () { return capture(constraints); });
+      }
+      return pick();
     } catch (e) {
       return orig(constraints);
     }
@@ -138,8 +181,12 @@ export const GUM_SHIM_PRELOAD_SOURCE = `(function () {
   var ipcRenderer = electron.ipcRenderer;
   if (!ipcRenderer) return;
   var CHANNEL = ${JSON.stringify(MEDIA_PICK_IPC_CHANNEL)};
+  var CAPTURE = ${JSON.stringify(MEDIA_CAPTURE_REPORT_CHANNEL)};
+  var FORCE = ${JSON.stringify(MEDIA_FORCE_PICK_CHANNEL)};
   var bridge = {
-    pickDevices: function (request) { return ipcRenderer.invoke(CHANNEL, request); }
+    pickDevices: function (request) { return ipcRenderer.invoke(CHANNEL, request); },
+    reportCapture: function (state) { ipcRenderer.send(CAPTURE, state); },
+    forcePick: function () { return ipcRenderer.invoke(FORCE); }
   };
   var install = ${GUM_SHIM_MAIN_WORLD};
   try {

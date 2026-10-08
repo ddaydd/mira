@@ -36,6 +36,7 @@ import { loginFillCommands } from './login-fill'
 import { inputCommands } from './input'
 import { magnifierCommands } from './magnifier'
 import { mediaCommands } from './media'
+import { mediaCaptureCommands } from './media-capture'
 import { navigationCommands } from './navigation'
 import { openCommands } from './open'
 import { paletteCommands } from './palette'
@@ -175,6 +176,7 @@ export type { TabMenuContext } from './tab-menu'
 export type { AppMenuContext } from './app-menu'
 export type { BookmarksBarContext } from './bookmarks-bar'
 export type { UiStateContext } from './ui-state'
+export type { MediaCaptureContext } from './media-capture'
 export { estimateMenuWidth, rightAlignedX } from './app-menu'
 export type { TabsContext, TabInfo, TabKind } from './tabs'
 export type { ThemeContext } from './themes'
@@ -263,6 +265,7 @@ export function createCommandRegistry(): CommandRegistry {
     ...appMenuCommands,
     ...bookmarksBarCommands,
     ...uiStateCommands,
+    ...mediaCaptureCommands,
     ...tabTidyCommands,
     ...tabTopCommands,
     ...tabsCommands,

@@ -6,7 +6,7 @@
 // media-device-picker.ts / media-device-picker-shim.ts; this class is the thin
 // Electron wiring (on-disk preload, session registration, one global ipc handler).
 
-import { BrowserWindow, ipcMain, type Session } from 'electron'
+import { BrowserWindow, ipcMain, type IpcMainEvent, type Session, type WebContents } from 'electron'
 import { existsSync, mkdirSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import {
@@ -18,6 +18,23 @@ import {
   type MediaPickRequest
 } from './media-device-picker'
 import { GUM_SHIM_PRELOAD_SOURCE } from './media-device-picker-shim'
+import {
+  MEDIA_CAPTURE_REPORT_CHANNEL,
+  MEDIA_FORCE_PICK_CHANNEL,
+  normalizeCaptureReport,
+  type FrameCapture
+} from './media-capture-state'
+
+/** What the camera button needs to hear from the picker and the shim (see
+ * media-capture-state.ts). All optional: without them the picker works as before. */
+export interface MediaCaptureHooks {
+  /** A frame of `wc` reports its live capture tracks. */
+  onCapture?: (wc: WebContents, frameKey: string, capture: FrameCapture) => void
+  /** A request from `wc` was denied (picker cancelled, or another one was up). */
+  onDenied?: (wc: WebContents) => void
+  /** Should `wc`'s next pinned request show the picker anyway? Read-and-clear. */
+  consumeForcePick?: (wc: WebContents) => boolean
+}
 
 /** Coerce the untrusted IPC payload (it crosses from a web page's main world)
  * into a MediaPickRequest, dropping anything malformed. Pure. */
@@ -48,7 +65,10 @@ export class MediaDevicePickerService {
   private pickerOpen = false
   private readonly attached = new WeakSet<Session>()
 
-  constructor(private readonly userDataDir: string) {}
+  constructor(
+    private readonly userDataDir: string,
+    private readonly hooks: MediaCaptureHooks = {}
+  ) {}
 
   /** Install the ipc handler (once) and register the shim preload on `ses`
    * (once per session). Call for each web-page session. */
@@ -66,7 +86,19 @@ export class MediaDevicePickerService {
   private installIpc(): void {
     if (this.ipcInstalled) return
     this.ipcInstalled = true
-    ipcMain.handle(MEDIA_PICK_IPC_CHANNEL, (_event, payload) => this.pick(payload))
+    ipcMain.handle(MEDIA_PICK_IPC_CHANNEL, async (event, payload) => {
+      const choice = await this.pick(payload)
+      if (!choice) this.hooks.onDenied?.(event.sender)
+      return choice
+    })
+    ipcMain.handle(MEDIA_FORCE_PICK_CHANNEL, (event) =>
+      this.hooks.consumeForcePick ? this.hooks.consumeForcePick(event.sender) : false
+    )
+    ipcMain.on(MEDIA_CAPTURE_REPORT_CHANNEL, (event: IpcMainEvent, payload) => {
+      const frame = event.senderFrame
+      const frameKey = frame ? `${frame.processId}:${frame.routingId}` : 'main'
+      this.hooks.onCapture?.(event.sender, frameKey, normalizeCaptureReport(payload))
+    })
   }
 
   /** Show the picker for one getUserMedia request and resolve the choice, or null
