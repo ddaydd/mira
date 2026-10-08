@@ -99,6 +99,7 @@ import { formatActivationEntry } from './activation-trace'
 import { lastCommand } from './command-log'
 import { formatVersion, type Outcome, type UpdateChecker } from './update-check'
 import { createUpdateChecker, presentInDialog, startUpdateSchedule } from './update-service'
+import { createRuntimeUpdateChecker } from './runtime-update-service'
 import { answersInDialog } from './update-dialog'
 import { shouldSuppressActivation, type NavKind } from './activation-policy'
 import { mayForeground, type CommandOrigin } from './foreground-policy'
@@ -108,11 +109,7 @@ import { type LlmConfig, type ChatMessage, type PageContext } from './llm'
 import { LlmRunner } from './llm-runner'
 import { type BookmarkTree, importChromeTree } from './bookmark-store'
 import { defaultChromeUserDataDir } from './chrome-import'
-import {
-  bookmarksMenuItems,
-  topChromeHeight,
-  type BookmarkMenuItem
-} from './bookmarks-bar'
+import { bookmarksMenuItems, topChromeHeight, type BookmarkMenuItem } from './bookmarks-bar'
 import { BookmarksController } from './bookmarks-controller'
 import {
   type Profile,
@@ -830,10 +827,11 @@ export class ProfileManager {
 
   private checker(): UpdateChecker {
     if (!this.updateChecker) {
-      this.updateChecker = createUpdateChecker()
-      // Releases only ship mac zips, so the daily notice would point a Linux
-      // build at downloads it cannot install. The menu check still works.
-      if (process.platform === 'darwin') startUpdateSchedule(this.updateChecker)
+      // Off macOS, Mira releases (mac zips) do not apply: the checker watches the
+      // embedded Electron / Chromium for security patches instead.
+      this.updateChecker =
+        process.platform === 'darwin' ? createUpdateChecker() : createRuntimeUpdateChecker()
+      startUpdateSchedule(this.updateChecker)
     }
     return this.updateChecker
   }
@@ -854,7 +852,11 @@ export class ProfileManager {
     const seen: Outcome[] = []
     await this.checker().checkNow(
       (outcome) => seen.push(outcome),
-      answersInDialog(origin) ? (outcome) => presentInDialog(outcome, parent) : undefined
+      // The dialog speaks of Mira releases; the runtime check (off macOS) answers
+      // with its own notification instead.
+      answersInDialog(origin) && process.platform === 'darwin'
+        ? (outcome) => presentInDialog(outcome, parent)
+        : undefined
     )
     const outcome = seen[0]
     if (!outcome) return { state: 'up-to-date' }

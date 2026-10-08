@@ -74,7 +74,9 @@ No published build: package your own with `npm run build:linux`, which writes a 
 AppImage to `dist/`. Prefer the `.deb` (`sudo apt install ./dist/mira_<version>_amd64.deb`): it
 installs an AppArmor profile so Chromium's sandbox can use user namespaces, which Ubuntu 24+
 restricts (falling back to a setuid `chrome-sandbox` where there are none), and registers Mira as a candidate default browser. Linux builds do not
-update themselves.
+update themselves: instead they check daily for a newer Electron patch of their line (the
+embedded Chromium's security fixes) and say so in a notification; File → Check for Updates…
+asks now. Updating = bump `electron` in `package.json`, rebuild the `.deb`, reinstall.
 
 What differs from macOS:
 
