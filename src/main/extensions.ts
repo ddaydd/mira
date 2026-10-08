@@ -42,7 +42,7 @@ import {
   type GrantedPermissions,
   type PermissionsRequest
 } from './extension-permissions'
-import { shouldAttachPopout } from './extension-popout'
+import { ExtensionPopoutRegistry, shouldAttachPopout } from './extension-popout'
 import {
   toExtensionInfo,
   serviceWorkerLogLevel,
@@ -138,6 +138,10 @@ export class ExtensionsService {
   /** One lib instance per Session (see the file header for why the key is the
    * Session object itself). */
   private readonly bySession = new Map<Session, ElectronChromeExtensions>()
+
+  /** Extension popout windows by the webContents the lib tracks as their tab
+   * (extension-popout.ts), so chrome.tabs.remove on one closes the window. */
+  private readonly popouts = new ExtensionPopoutRegistry<WebContents>()
   /** Sessions whose recorded sideloads have been loaded this run, so reopening
    * a profile window doesn't re-load (loadExtension would throw on a dup). */
   private readonly loadedSessions = new Set<Session>()
@@ -230,7 +234,9 @@ export class ExtensionsService {
       session: ses,
       createTab: (details) => hooks.createTab({ url: details.url }),
       selectTab: (wc) => hooks.selectTab(wc),
-      removeTab: (wc) => hooks.removeTab(wc),
+      removeTab: (wc) => {
+        if (!this.popouts.closeIfPopout(wc)) hooks.removeTab(wc)
+      },
       // A window = a profile normally, so extensions don't get to open profile
       // windows — but a few flows genuinely need a transient popOUT window that
       // hosts an extension page: Bitwarden's passkey/unlock picker (fido2) opens
@@ -312,7 +318,17 @@ export class ExtensionsService {
     // The origin only: the path of an extension page can name a vault item.
     const origin = url ? url.split('/').slice(0, 3).join('/') : 'no url'
     console.log(`[mira] extension popout opened: ${origin} (${attached ? 'attached' : 'free'})`)
-    win.once('closed', () => console.log(`[mira] extension popout closed: ${origin}`))
+    // The page must be a tab of this window to the lib, or Bitwarden's
+    // closeSingleActionPopout (tabs.query by URL, then windows.remove) finds
+    // nothing and the picker stays open after the passkey is saved
+    // (extension-popout.ts).
+    const contents = win.webContents
+    this.popouts.register(contents, win)
+    this.bySession.get(ses)?.addTab(contents, win)
+    win.once('closed', () => {
+      this.popouts.unregister(contents)
+      console.log(`[mira] extension popout closed: ${origin}`)
+    })
     if (url) {
       try {
         await win.loadURL(url)

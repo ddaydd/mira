@@ -26,3 +26,48 @@ export interface PopoutParentCandidate {
 export function shouldAttachPopout(profileWindow: PopoutParentCandidate | null): boolean {
   return !!profileWindow && !profileWindow.isDestroyed() && profileWindow.isFocused()
 }
+
+// --- The popout's page as a tab ------------------------------------------
+//
+// Chrome gives a popout window one tab, and Bitwarden closes its passkey picker
+// through it: closeSingleActionPopout runs chrome.tabs.query({url:
+// "chrome-extension://<id>/popup/index.html*"}), keeps the tab whose URL holds
+// `singleActionPopout=vault_Fido2Popout_<session>`, then
+// chrome.windows.remove(tab.windowId). A bare BrowserWindow is not a tab to the
+// lib, so that query came back empty and the window stayed open after the
+// passkey was saved (2026-10-08, kraken.com: passkey created, picker still up
+// for nine minutes until closed by hand). extensions.ts therefore registers the
+// popout's webContents as the tab of its window.
+//
+// Once it is a tab, chrome.tabs.remove can target it too, and the lib forwards
+// that to Mira's removeTab hook, which only knows profile tabs. This registry
+// lets the hook close the popout window instead of silently doing nothing.
+
+/** The slice of a popout BrowserWindow the registry acts on. */
+export interface PopoutWindowHandle {
+  isDestroyed(): boolean
+  close(): void
+}
+
+/** Popout windows keyed by the webContents the lib sees as their tab. */
+export class ExtensionPopoutRegistry<Contents extends object = object> {
+  private readonly byContents = new Map<Contents, PopoutWindowHandle>()
+
+  register(contents: Contents, window: PopoutWindowHandle): void {
+    this.byContents.set(contents, window)
+  }
+
+  unregister(contents: Contents): void {
+    this.byContents.delete(contents)
+  }
+
+  /** Close the popout whose tab is `contents`. False when `contents` is not a
+   * popout's, so the caller falls through to closing a profile tab. */
+  closeIfPopout(contents: Contents): boolean {
+    const window = this.byContents.get(contents)
+    if (!window) return false
+    this.byContents.delete(contents)
+    if (!window.isDestroyed()) window.close()
+    return true
+  }
+}
