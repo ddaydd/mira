@@ -171,6 +171,7 @@ export { formatBytes, rankTabMemory, buildTabMemoryReport, hostOf } from './tab-
 export type { TabDetachContext, WindowInfo } from './tab-detach'
 export type { TabMenuContext } from './tab-menu'
 export type { AppMenuContext } from './app-menu'
+export { estimateMenuWidth, rightAlignedX } from './app-menu'
 export type { TabsContext, TabInfo, TabKind } from './tabs'
 export type { ThemeContext } from './themes'
 export type { Theme, ThemeInput } from '../theme-store'

@@ -62,6 +62,7 @@ import type {
   RawFrame,
   RawTab
 } from './commands'
+import { estimateMenuWidth, rightAlignedX } from './commands'
 import {
   closedSkillPane,
   formatMemory,
@@ -6808,10 +6809,14 @@ export class ProfileManager {
         if (!target) throw new Error('no target window')
         this.showTabMenuIn(target, tabId)
       },
-      showAppMenu: (at) => {
+      showAppMenu: (at, align) => {
         if (!target) throw new Error('no target window')
         if (target.window.isDestroyed()) return
-        Menu.getApplicationMenu()?.popup({ window: target.window, ...at })
+        const menu = Menu.getApplicationMenu()
+        if (!menu) return
+        const width = estimateMenuWidth(menu.items.filter((i) => i.visible).map((i) => i.label))
+        const pos = at && align === 'right' ? { ...at, x: rightAlignedX(at.x, width) } : at
+        menu.popup({ window: target.window, ...pos })
       },
       showAudioMenu: () => {
         if (!target) throw new Error('no target window')

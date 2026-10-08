@@ -9,9 +9,10 @@ export default function AppMenuButton(): ReactElement | null {
   // Read at render, not at import: App.tsx is imported by node-side tests.
   if (window.electron.process.platform === 'darwin') return null
   const onClick = (e: MouseEvent<HTMLButtonElement>): void => {
-    // Anchor the dropdown just under the button.
+    // Drop down under the button, right edges aligned (Chrome's ⋮ menu): the
+    // button sits at the window's right edge, so a left-anchored menu overflowed.
     const rect = e.currentTarget.getBoundingClientRect()
-    window.mira.command('show-app-menu', { x: rect.left, y: rect.bottom })
+    window.mira.command('show-app-menu', { x: rect.right, y: rect.bottom, align: 'right' })
   }
   return (
     <button
