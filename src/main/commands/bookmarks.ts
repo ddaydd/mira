@@ -38,7 +38,30 @@ export interface BookmarkContext {
   /** Open a url favorite in a new tab of the target window and focus it. Throws on
    * an unknown id, a folder id, or when there is no target window. */
   openBookmark: (id: string) => { tabId: string; url: string }
+  /** Read a Chrome profile's `Bookmarks` file and add its whole tree as ONE new
+   * top-level folder `title`, in profile `to` (default: the target window's).
+   * Throws on an unknown profile or an unreadable file. */
+  importChromeBookmarks: (options: ImportChromeBookmarksOptions) => {
+    node: BookmarkNode
+    urls: number
+  }
 }
+
+export interface ImportChromeBookmarksOptions {
+  /** Chrome profile directory, e.g. "Default", "Profile 1". */
+  profileDir: string
+  /** Chrome User Data dir; defaults to the platform's standard location. */
+  userDataDir?: string
+  /** Title of the folder the import lands in. */
+  title: string
+  /** Mira profile id to import INTO; defaults to the target window's profile. */
+  to?: string
+}
+
+export type ImportChromeBookmarksParams = Partial<ImportChromeBookmarksOptions>
+
+/** Folder title when the caller names none. */
+export const DEFAULT_IMPORT_TITLE = 'Imported from Chrome'
 
 export interface AddBookmarkParams {
   url?: string
@@ -157,6 +180,29 @@ export const bookmarksCommands: CommandMap<CommandContext> = {
   'list-bookmarks': (ctx) => {
     const { tree } = ctx.listBookmarks()
     return { ok: true, tree }
+  },
+
+  // Bring a Chrome profile's favorites over, as one folder (non-destructive: the
+  // existing tree is untouched, and a second import lands in its own folder).
+  'import-chrome-bookmarks': (ctx, params) => {
+    const p = (params ?? {}) as ImportChromeBookmarksParams
+    for (const key of ['profileDir', 'userDataDir', 'title', 'to'] as const) {
+      const v = p[key]
+      if (v !== undefined && (typeof v !== 'string' || v.trim() === '')) {
+        return { ok: false, error: `"${key}" must be a non-empty string` }
+      }
+    }
+    try {
+      const { node, urls } = ctx.importChromeBookmarks({
+        profileDir: p.profileDir?.trim() ?? 'Default',
+        title: p.title?.trim() ?? DEFAULT_IMPORT_TITLE,
+        ...(p.userDataDir ? { userDataDir: p.userDataDir.trim() } : {}),
+        ...(p.to ? { to: p.to.trim() } : {})
+      })
+      return { ok: true, folderId: node.id, title: node.title, urls }
+    } catch (error) {
+      return fail(error)
+    }
   },
 
   'open-bookmark': (ctx, params) => {

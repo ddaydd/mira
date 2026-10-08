@@ -113,3 +113,22 @@ describe('BookmarksController.urlFor', () => {
     expect(() => ctrl.urlFor(folder.id)).toThrow(/not a url bookmark/)
   })
 })
+
+describe('BookmarksController.importFolder', () => {
+  it('adds the subtree as one top-level folder in a single commit', () => {
+    const { ctrl, persist } = make([{ id: 'a', kind: 'url', title: 'A', url: 'https://a.com' }])
+    const { node, urls } = ctrl.importFolder('Imported', [
+      { id: 'x', kind: 'url', title: 'X', url: 'https://x.com' },
+      {
+        id: 'f',
+        kind: 'folder',
+        title: 'F',
+        children: [{ id: 'y', kind: 'url', title: 'A again', url: 'https://a.com' }]
+      }
+    ])
+    expect(urls).toBe(2)
+    expect(ctrl.get().map((n) => n.title)).toEqual(['A', 'Imported'])
+    expect(node).toMatchObject({ kind: 'folder', title: 'Imported' })
+    expect(persist).toHaveBeenCalledTimes(1)
+  })
+})

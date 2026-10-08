@@ -250,3 +250,62 @@ export function importAtlasTree(atlas: unknown): BookmarkTree {
   }
   return []
 }
+
+// --- Import from Chrome (and any Chromium browser) -------------------------
+//
+// <User Data>/<profile>/Bookmarks is JSON: `roots` holds `bookmark_bar`, `other`
+// and `synced` (mobile), each a folder node `{type:'folder', name, children}`;
+// a leaf is `{type:'url', name, url}`. Ids are freshly minted (not Chrome's guids)
+// so importing the same profile twice can never collide with the first import.
+
+interface ChromeNode {
+  type?: unknown
+  name?: unknown
+  url?: unknown
+  children?: unknown
+}
+
+function importChromeChildren(raw: unknown, newId: () => string): BookmarkTree {
+  if (!Array.isArray(raw)) return []
+  const out: BookmarkTree = []
+  for (const child of raw as ChromeNode[]) {
+    if (!child || typeof child !== 'object') continue
+    const title = typeof child.name === 'string' ? child.name : ''
+    if (child.type === 'url') {
+      if (typeof child.url !== 'string' || child.url.trim() === '') continue
+      out.push({ id: newId(), kind: 'url', title, url: child.url })
+    } else if (child.type === 'folder') {
+      out.push({
+        id: newId(),
+        kind: 'folder',
+        title,
+        children: importChromeChildren(child.children, newId)
+      })
+    }
+  }
+  return out
+}
+
+/** Convert a parsed Chrome `Bookmarks` file into our tree: the bookmarks bar's
+ * contents first (at the top, as in Chrome), then "Other bookmarks" and "Mobile
+ * bookmarks" as folders — each only when non-empty. Pure apart from `newId`. */
+export function importChromeTree(chrome: unknown, newId: () => string): BookmarkTree {
+  const roots = (chrome as { roots?: Record<string, ChromeNode> } | null)?.roots
+  if (!roots || typeof roots !== 'object') return []
+  const tree = importChromeChildren(roots.bookmark_bar?.children, newId)
+  for (const [key, fallback] of [
+    ['other', 'Other bookmarks'],
+    ['synced', 'Mobile bookmarks']
+  ] as const) {
+    const children = importChromeChildren(roots[key]?.children, newId)
+    if (children.length === 0) continue
+    const name = roots[key]?.name
+    tree.push({
+      id: newId(),
+      kind: 'folder',
+      title: typeof name === 'string' && name ? name : fallback,
+      children
+    })
+  }
+  return tree
+}

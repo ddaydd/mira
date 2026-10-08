@@ -14,6 +14,7 @@ import { type CommandMap, fail } from './registry'
 import type { CommandContext } from './context'
 import {
   chromeKeys,
+  defaultChromeUserDataDir,
   decryptWithKeys,
   rowToSetDetails,
   readSafeStorageKey,
@@ -76,11 +77,7 @@ export interface ImportCookiesParams {
   safeStorageService?: string
 }
 
-/** Standard Chrome User Data directory (macOS, else Linux). */
-const DEFAULT_CHROME_DIR =
-  process.platform === 'darwin'
-    ? join(homedir(), 'Library', 'Application Support', 'Google', 'Chrome')
-    : join(homedir(), '.config', 'google-chrome')
+const DEFAULT_CHROME_DIR = defaultChromeUserDataDir(process.platform, homedir())
 
 export const cookieCommands: CommandMap<CommandContext> = {
   'import-cookies': async (ctx, params) => {

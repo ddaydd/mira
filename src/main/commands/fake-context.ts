@@ -1571,6 +1571,10 @@ export function makeContext(
     showTabMenu: () => {},
     // Application menu dropdown (show-app-menu): native popup, a no-op in tests.
     showAppMenu: () => {},
+    importChromeBookmarks: ({ title }) => ({
+      node: { id: 'imported', kind: 'folder', title, children: [] },
+      urls: 0
+    }),
     // Native audio drop-down (show-audio-menu): a no-op in tests — the item list is
     // covered by audio-menu.test.ts, so the command test only checks dispatch.
     showAudioMenu: () => {},

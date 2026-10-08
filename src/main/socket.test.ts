@@ -230,6 +230,9 @@ function setup(): {
     toggleTabsPanel: (collapsed?: boolean) => ({ collapsed: collapsed ?? true }),
     showTabMenu: () => {},
     showAppMenu: () => {},
+    importChromeBookmarks: () => {
+      throw new Error('unused')
+    },
     showAudioMenu: () => {},
     listTabFolders: () => ({ folders: [] }),
     createTabFolder: () => ({ id: 'folder-1' }),

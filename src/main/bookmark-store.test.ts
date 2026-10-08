@@ -10,6 +10,7 @@ import {
   flatten,
   normalizeBookmarks,
   importAtlasTree,
+  importChromeTree,
   type BookmarkNode
 } from './bookmark-store'
 
@@ -143,5 +144,62 @@ describe('importAtlasTree', () => {
       { uuid: 'nourl', title: 'no url', type: { url: {} } }
     ])
     expect(tree.map((n) => n.id)).toEqual(['ok'])
+  })
+})
+
+describe('importChromeTree', () => {
+  // The shape of <User Data>/<profile>/Bookmarks, trimmed to what we read.
+  const chrome = {
+    roots: {
+      bookmark_bar: {
+        type: 'folder',
+        name: 'Bookmarks bar',
+        children: [
+          { type: 'url', name: 'Dayd', url: 'https://dayd.fr/' },
+          {
+            type: 'folder',
+            name: 'Dev',
+            children: [{ type: 'url', name: 'MDN', url: 'https://developer.mozilla.org/' }]
+          },
+          { type: 'url', name: 'no url' },
+          { type: 'separator', name: 'unknown kind' }
+        ]
+      },
+      other: {
+        type: 'folder',
+        name: 'Autres favoris',
+        children: [{ type: 'url', name: 'Other', url: 'https://o.test/' }]
+      },
+      synced: { type: 'folder', name: 'Favoris sur mobile', children: [] }
+    }
+  }
+  const counter = (): (() => string) => {
+    let n = 0
+    return () => `id-${++n}`
+  }
+
+  it('puts the bar first, then non-empty Other / Mobile roots as folders', () => {
+    const tree = importChromeTree(chrome, counter())
+    expect(tree.map((n) => n.title)).toEqual(['Dayd', 'Dev', 'Autres favoris'])
+    expect(tree[1]).toMatchObject({
+      kind: 'folder',
+      children: [{ kind: 'url', title: 'MDN', url: 'https://developer.mozilla.org/' }]
+    })
+  })
+
+  it('mints a fresh id per node instead of reusing Chrome ids', () => {
+    const ids = flatten(importChromeTree(chrome, counter())).map((n) => n.id)
+    expect(new Set(ids).size).toBe(ids.length)
+    expect(ids.every((id) => id.startsWith('id-'))).toBe(true)
+  })
+
+  it('names an unnamed root by its Chrome default', () => {
+    const raw = { roots: { other: { children: [{ type: 'url', name: 'x', url: 'https://x' }] } } }
+    expect(importChromeTree(raw, counter())[0].title).toBe('Other bookmarks')
+  })
+
+  it('returns an empty tree for anything that is not a Bookmarks file', () => {
+    expect(importChromeTree(null, counter())).toEqual([])
+    expect(importChromeTree({ nope: 1 }, counter())).toEqual([])
   })
 })

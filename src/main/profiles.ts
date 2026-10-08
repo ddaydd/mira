@@ -17,7 +17,8 @@ import {
   shouldRestorePageFocus,
   type FocusTarget
 } from './focus-restore'
-import { existsSync, rmSync } from 'node:fs'
+import { existsSync, readFileSync, rmSync } from 'node:fs'
+import { homedir } from 'node:os'
 import { appendFile, mkdir, writeFile } from 'node:fs/promises'
 import { dirname, extname, join } from 'node:path'
 import {
@@ -105,7 +106,8 @@ import { lastTabClosesWindow } from './last-tab-close'
 import { isLiveContents } from './live-contents'
 import { type LlmConfig, type ChatMessage, type PageContext } from './llm'
 import { LlmRunner } from './llm-runner'
-import { type BookmarkTree } from './bookmark-store'
+import { type BookmarkTree, importChromeTree } from './bookmark-store'
+import { defaultChromeUserDataDir } from './chrome-import'
 import { BookmarksController } from './bookmarks-controller'
 import {
   type Profile,
@@ -6890,6 +6892,18 @@ export class ProfileManager {
       moveBookmark: (id, parentId, index) => bookmarks().move(id, parentId, index),
       listBookmarks: () => ({ tree: bookmarks().get() }),
       openBookmark: (id) => this.openBookmarkIn(target, id),
+      importChromeBookmarks: ({ profileDir, userDataDir, title, to }) => {
+        if (to !== undefined && !findById(this.profiles, to)) {
+          throw new Error(`unknown profile: ${to}`)
+        }
+        const dir = userDataDir ?? defaultChromeUserDataDir(process.platform, homedir())
+        const raw: unknown = JSON.parse(readFileSync(join(dir, profileDir, 'Bookmarks'), 'utf8'))
+        const children = importChromeTree(raw, randomUUID)
+        return (to !== undefined ? this.bookmarksFor(to) : bookmarks()).importFolder(
+          title,
+          children
+        )
+      },
       // Vault (encrypted profile): the commands take an explicit id, so they don't
       // depend on the target window.
       encryptProfile: (id, password) => this.encryptProfileVault(id, password),

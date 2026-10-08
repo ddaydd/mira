@@ -19,6 +19,7 @@ import {
   renameNode,
   moveNode,
   findNode,
+  flatten,
   findUrl as findBookmarkUrl
 } from './bookmark-store'
 
@@ -87,6 +88,16 @@ export class BookmarksController {
     this.tree = moveNode(this.tree, id, parentId, index)
     this.commit()
     return { moved: true }
+  }
+
+  /** Add a whole subtree in one write: a new top-level folder `title` holding
+   * `children` (an import). Not deduplicated by url — an import mirrors its
+   * source as-is. Returns the folder and how many urls it brought. */
+  importFolder(title: string, children: BookmarkTree): { node: BookmarkNode; urls: number } {
+    const node: BookmarkNode = { id: randomUUID(), kind: 'folder', title, children }
+    this.tree = insertNode(this.tree, null, node)
+    this.commit()
+    return { node, urls: flatten(children).length }
   }
 
   /** The url of a url-favorite by id, for opening it in a tab. Throws on an unknown

@@ -34,6 +34,13 @@ const DOMAIN_HASH_LENGTH = 32
 /** Microseconds between 1601-01-01 (Chrome epoch) and 1970-01-01 (Unix epoch). */
 const CHROME_EPOCH_OFFSET_MICROS = 11644473600000000
 
+/** Chrome's User Data directory: the folder holding Default/, Profile 1/… */
+export function defaultChromeUserDataDir(platform: string, home: string): string {
+  return platform === 'darwin'
+    ? join(home, 'Library', 'Application Support', 'Google', 'Chrome')
+    : join(home, '.config', 'google-chrome')
+}
+
 /** Derive the AES key from a "… Safe Storage" Keychain password. */
 export function deriveKey(safeStoragePassword: string, iterations = ITERATIONS): Buffer {
   return pbkdf2Sync(safeStoragePassword, SALT, iterations, KEY_LENGTH, 'sha1')

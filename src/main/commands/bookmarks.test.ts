@@ -244,3 +244,49 @@ describe('open-bookmark', () => {
     expect(registry.execute('open-bookmark', {}, ctx)).toEqual({ ok: false, error: 'missing "id"' })
   })
 })
+
+describe('import-chrome-bookmarks', () => {
+  it('imports the Default Chrome profile under the default folder title', () => {
+    const { ctx } = makeContext()
+    const calls: unknown[] = []
+    const real = ctx.importChromeBookmarks
+    ctx.importChromeBookmarks = (o) => (calls.push(o), real(o))
+    const result = createCommandRegistry().execute('import-chrome-bookmarks', {}, ctx)
+    expect(result).toEqual({
+      ok: true,
+      folderId: 'imported',
+      title: 'Imported from Chrome',
+      urls: 0
+    })
+    expect(calls).toEqual([{ profileDir: 'Default', title: 'Imported from Chrome' }])
+  })
+
+  it('passes a chosen profile, title and target through, trimmed', () => {
+    const { ctx } = makeContext()
+    const calls: unknown[] = []
+    const real = ctx.importChromeBookmarks
+    ctx.importChromeBookmarks = (o) => (calls.push(o), real(o))
+    const params = { profileDir: ' Profile 1 ', title: 'Pro', to: 'work' }
+    createCommandRegistry().execute('import-chrome-bookmarks', params, ctx)
+    expect(calls).toEqual([{ profileDir: 'Profile 1', title: 'Pro', to: 'work' }])
+  })
+
+  it('rejects an empty string param', () => {
+    const { ctx } = makeContext()
+    expect(createCommandRegistry().execute('import-chrome-bookmarks', { title: ' ' }, ctx)).toEqual(
+      {
+        ok: false,
+        error: '"title" must be a non-empty string'
+      }
+    )
+  })
+
+  it('reports a failed read as an error, not a throw', () => {
+    const { ctx } = makeContext()
+    ctx.importChromeBookmarks = () => {
+      throw new Error('ENOENT: no such file')
+    }
+    const result = createCommandRegistry().execute('import-chrome-bookmarks', {}, ctx)
+    expect(result).toMatchObject({ ok: false })
+  })
+})
