@@ -3,9 +3,18 @@
 // registry command: a url opens in the active tab via `navigate` (Cmd/Ctrl- or
 // middle-click: a new tab), a folder pops its NATIVE dropdown via
 // `show-bookmarks-menu` (a DOM menu could not draw over the web view), and so
-// does the » button with the items that did not fit.
+// does the » button with the items that did not fit. A right-click pops the
+// item's native menu (`show-bookmark-menu`); its Rename… comes back here as an
+// inline text field (`edit-bookmark` → onEditBookmark → rename-bookmark).
 
-import { useLayoutEffect, useRef, useState, type MouseEvent, type ReactElement } from 'react'
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type MouseEvent,
+  type ReactElement
+} from 'react'
 import type { BookmarkNode } from '../../../../preload/index.d'
 import { firstHiddenIndex } from './overflow'
 
@@ -67,6 +76,17 @@ function under(el: HTMLElement): { x: number; y: number } {
 export default function BookmarksBar({ tree }: { tree: BookmarkNode[] }): ReactElement {
   const stripRef = useRef<HTMLDivElement>(null)
   const [hiddenFrom, setHiddenFrom] = useState<number | null>(null)
+  const [editingId, setEditingId] = useState<string | null>(null)
+
+  useEffect(() => window.mira.onEditBookmark((id) => setEditingId(id)), [])
+
+  const commitRename = (node: BookmarkNode, value: string): void => {
+    setEditingId(null)
+    const title = value.trim()
+    // An empty title would turn the item into a bare icon by accident: ignore it.
+    if (title && title !== node.title)
+      window.mira.command('rename-bookmark', { id: node.id, title })
+  }
 
   // Recompute which items overflow on every resize of the strip and every tree
   // change. The strip clips (overflow: hidden); the rest goes to the » menu.
@@ -100,23 +120,47 @@ export default function BookmarksBar({ tree }: { tree: BookmarkNode[] }): ReactE
   return (
     <div className="bookmarks-bar">
       <div className="bookmarks-bar-strip" ref={stripRef}>
-        {tree.map((node, index) => (
-          <button
-            key={node.id}
-            type="button"
-            data-bar-index={index}
-            className="bookmarks-bar-item"
-            title={node.kind === 'url' ? `${node.title}\n${node.url}` : node.title}
-            style={
-              hiddenFrom !== null && index >= hiddenFrom ? { visibility: 'hidden' } : undefined
-            }
-            onClick={(e) => open(node, e)}
-            onAuxClick={(e) => e.button === 1 && open(node, e)}
-          >
-            <Icon node={node} />
-            {node.title.trim() && <span className="bookmarks-bar-title">{node.title}</span>}
-          </button>
-        ))}
+        {tree.map((node, index) =>
+          node.id === editingId ? (
+            <input
+              key={node.id}
+              data-bar-index={index}
+              className="bookmarks-bar-edit"
+              defaultValue={node.title}
+              autoFocus
+              onFocus={(e) => e.currentTarget.select()}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') commitRename(node, e.currentTarget.value)
+                else if (e.key === 'Escape') setEditingId(null)
+              }}
+              onBlur={(e) => commitRename(node, e.currentTarget.value)}
+            />
+          ) : (
+            <button
+              key={node.id}
+              type="button"
+              data-bar-index={index}
+              className="bookmarks-bar-item"
+              title={node.kind === 'url' ? `${node.title}\n${node.url}` : node.title}
+              style={
+                hiddenFrom !== null && index >= hiddenFrom ? { visibility: 'hidden' } : undefined
+              }
+              onClick={(e) => open(node, e)}
+              onAuxClick={(e) => e.button === 1 && open(node, e)}
+              onContextMenu={(e) => {
+                e.preventDefault()
+                window.mira.command('show-bookmark-menu', {
+                  id: node.id,
+                  x: e.clientX,
+                  y: e.clientY
+                })
+              }}
+            >
+              <Icon node={node} />
+              {node.title.trim() && <span className="bookmarks-bar-title">{node.title}</span>}
+            </button>
+          )
+        )}
       </div>
       {hiddenFrom !== null && (
         <button

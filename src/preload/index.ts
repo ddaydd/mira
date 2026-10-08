@@ -79,6 +79,13 @@ const mira = {
     ipcRenderer.on('mira:reveal-tab', listener)
     return () => ipcRenderer.removeListener('mira:reveal-tab', listener)
   },
+  // Main asks the bookmarks bar to open its inline title editor on a favorite
+  // (right-click → Rename…). Returns an unsubscribe function.
+  onEditBookmark: (callback: (id: string) => void): (() => void) => {
+    const listener = (_event: unknown, payload: { id: string }): void => callback(payload.id)
+    ipcRenderer.on('mira:edit-bookmark', listener)
+    return () => ipcRenderer.removeListener('mira:edit-bookmark', listener)
+  },
   onEditTabFolder: (callback: (folderId: string) => void): (() => void) => {
     const listener = (_event: unknown, payload: { id: string }): void => callback(payload.id)
     ipcRenderer.on('mira:edit-tab-folder', listener)

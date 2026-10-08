@@ -239,6 +239,8 @@ function setup(): {
     ungroupBookmarkFolder: () => ({ moved: 0 }),
     setBookmarksBarVisible: () => ({ visible: false }),
     showBookmarksMenu: () => {},
+    showBookmarkMenu: () => {},
+    editBookmark: () => ({ editing: false }),
     importChromeBookmarks: () => {
       throw new Error('unused')
     },

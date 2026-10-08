@@ -2049,6 +2049,13 @@ export function makeContext(
       bookmarksBar.visible = visible ?? !bookmarksBar.visible
       return { visible: bookmarksBar.visible }
     },
+    showBookmarkMenu: (id: string) => {
+      if (!findNode(state.bookmarks, id)) throw new Error(`unknown bookmark: ${id}`)
+    },
+    editBookmark: (id: string) => {
+      if (!findNode(state.bookmarks, id)) throw new Error(`unknown bookmark: ${id}`)
+      return { editing: bookmarksBar.visible }
+    },
     showBookmarksMenu: ({ folderId, fromIndex }) => {
       bookmarksMenuItems(state.bookmarks, folderId, fromIndex)
     },

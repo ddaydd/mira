@@ -104,6 +104,7 @@ export interface MiraAPI {
   onFocusAddressBar: (callback: () => void) => () => void
   /** Subscribe to the "open this tab folder's name field" push (a folder created
    * from the "New Folder…" menu). Returns unsubscribe. */
+  onEditBookmark: (callback: (id: string) => void) => () => void
   onEditTabFolder: (callback: (folderId: string) => void) => () => void
   onRevealTab: (callback: (tabId: string) => void) => () => void
   /** Subscribe to the "show the find bar" push (Cmd+F / find-open). Returns

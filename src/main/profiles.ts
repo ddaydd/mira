@@ -29,6 +29,7 @@ import {
   WebContentsView,
   clipboard,
   contentTracing,
+  dialog,
   screen,
   session,
   shell,
@@ -107,7 +108,8 @@ import { lastTabClosesWindow } from './last-tab-close'
 import { isLiveContents } from './live-contents'
 import { type LlmConfig, type ChatMessage, type PageContext } from './llm'
 import { LlmRunner } from './llm-runner'
-import { type BookmarkTree, importChromeTree } from './bookmark-store'
+import { type BookmarkTree, importChromeTree, findNode as findBookmarkNode } from './bookmark-store'
+import { buildBookmarkMenu } from './bookmark-menu'
 import { defaultChromeUserDataDir } from './chrome-import'
 import { bookmarksMenuItems, topChromeHeight, type BookmarkMenuItem } from './bookmarks-bar'
 import { BookmarksController } from './bookmarks-controller'
@@ -4875,6 +4877,44 @@ export class ProfileManager {
     return { visible: next }
   }
 
+  /** Pop the right-click menu of a bar item (bookmark-menu.ts decides the
+   * entries). Each entry runs its registry command against THIS window's chrome;
+   * a guarded one (a non-empty folder delete) asks first, in a sheet. */
+  private showBookmarkMenuIn(
+    pw: ProfileWindow,
+    id: string,
+    at: { x: number; y: number } | undefined
+  ): void {
+    if (pw.window.isDestroyed()) return
+    const node = findBookmarkNode(this.bookmarksFor(pw.id).get(), id)
+    if (!node) throw new Error(`unknown bookmark: ${id}`)
+    const chrome = pw.window.webContents
+    const template = buildBookmarkMenu(node).map(
+      (entry): MenuItemConstructorOptions =>
+        entry.type === 'separator'
+          ? { type: 'separator' }
+          : {
+              label: entry.label,
+              click: () => {
+                const run = (): void => this.deps.runCommand?.(chrome, entry.command, entry.params)
+                if (!entry.confirm) return run()
+                dialog
+                  .showMessageBox(pw.window, {
+                    type: 'warning',
+                    message: entry.confirm.message,
+                    detail: entry.confirm.detail,
+                    buttons: [entry.confirm.button, 'Cancel'],
+                    defaultId: 1,
+                    cancelId: 1
+                  })
+                  .then(({ response }) => response === 0 && run())
+                  .catch((error) => console.error('[mira] bookmark delete prompt', error))
+              }
+            }
+    )
+    Menu.buildFromTemplate(template).popup({ window: pw.window, ...at })
+  }
+
   /** Pop the native dropdown of a bar folder (or the strip's overflow) of this
    * window's profile. A pick opens the page in the active tab, as Chrome's bar
    * does; the item list is pure (bookmarksMenuItems). */
@@ -6963,6 +7003,23 @@ export class ProfileManager {
       openBookmark: (id) => this.openBookmarkIn(target, id),
       ungroupBookmarkFolder: (id) => bookmarks().ungroup(id),
       setBookmarksBarVisible: (visible) => this.setBookmarksBarVisible(visible),
+      showBookmarkMenu: (id, at) => {
+        if (!target) throw new Error('no target window')
+        this.showBookmarkMenuIn(target, id, at)
+      },
+      editBookmark: (id) => {
+        if (!target) throw new Error('no target window')
+        const tree = this.bookmarksFor(target.id).get()
+        if (!findBookmarkNode(tree, id)) throw new Error(`unknown bookmark: ${id}`)
+        // Only a top-level item sits on the bar, so only it can be edited there.
+        const onBar = tree.some((n) => n.id === id)
+        if (!this.appSettings.bookmarksBarVisible || !onBar || target.window.isDestroyed()) {
+          return { editing: false }
+        }
+        target.window.webContents.focus()
+        target.window.webContents.send('mira:edit-bookmark', { id })
+        return { editing: true }
+      },
       showBookmarksMenu: ({ folderId, fromIndex, at }) => {
         if (!target) throw new Error('no target window')
         this.showBookmarksMenuIn(target, folderId, fromIndex, at)

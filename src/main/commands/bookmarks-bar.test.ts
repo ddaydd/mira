@@ -68,3 +68,37 @@ describe('show-bookmarks-menu', () => {
     })
   })
 })
+
+describe('show-bookmark-menu / edit-bookmark', () => {
+  it('pops the menu of a known item and refuses an unknown one', () => {
+    const { ctx } = makeContext()
+    const registry = createCommandRegistry()
+    const f = registry.execute('add-folder', { title: 'Dev' }, ctx) as unknown as {
+      node: { id: string }
+    }
+    const params = { id: f.node.id, x: 12, y: 50 }
+    expect(registry.execute('show-bookmark-menu', params, ctx)).toEqual({ ok: true })
+    expect(registry.execute('show-bookmark-menu', { id: 'nope' }, ctx)).toMatchObject({ ok: false })
+    expect(registry.execute('show-bookmark-menu', {}, ctx)).toEqual({
+      ok: false,
+      error: 'missing "id"'
+    })
+  })
+
+  it('edits inline only while the bar is shown', () => {
+    const { ctx } = makeContext()
+    const registry = createCommandRegistry()
+    const f = registry.execute('add-folder', { title: 'Dev' }, ctx) as unknown as {
+      node: { id: string }
+    }
+    expect(registry.execute('edit-bookmark', { id: f.node.id }, ctx)).toEqual({
+      ok: true,
+      editing: false
+    })
+    registry.execute('toggle-bookmarks-bar', { visible: true }, ctx)
+    expect(registry.execute('edit-bookmark', { id: f.node.id }, ctx)).toEqual({
+      ok: true,
+      editing: true
+    })
+  })
+})
