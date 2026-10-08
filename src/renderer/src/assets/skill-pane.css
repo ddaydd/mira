@@ -7,7 +7,7 @@
   /* Accent tokens (--accent, --accent-strong, --accent-soft, --accent-line)
      come from the global theme layer in tokens.css. */
   position: fixed;
-  top: var(--toolbar-height);
+  top: var(--chrome-top, var(--toolbar-height));
   bottom: var(--statusbar-height);
   right: 0;
   width: var(--skill-pane-width);

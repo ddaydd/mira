@@ -7,6 +7,7 @@ import SkillPane, { type ChatOptions } from './SkillPane'
 import ResizeHandle from './ResizeHandle'
 import ExtensionActions from './features/extensions/ExtensionActions'
 import AppMenuButton from './features/app-menu/AppMenuButton'
+import BookmarksBar from './features/bookmarks-bar/BookmarksBar'
 import FindBar from './features/find/FindBar'
 import MediaGallery from './features/media/MediaGallery'
 import { ReloadSpinner } from './features/loading/ReloadSpinner'
@@ -94,6 +95,15 @@ function App(): React.JSX.Element {
   // Zen (focus) mode (Cmd+Shift+H): main hides the toolbar + status bar + both
   // panels together. The flag rides the tabs-changed push (a chrome layout bit).
   const [chromeHidden, setChromeHidden] = useState(false)
+  const [bookmarksBar, setBookmarksBar] = useState(false)
+  const showBookmarksBar = bookmarksBar && !chromeHidden
+  // Overlays (palette, panes, resize handles) start below the toolbar AND the bar.
+  useEffect(() => {
+    const root = document.documentElement.style
+    if (showBookmarksBar) {
+      root.setProperty('--chrome-top', 'calc(var(--toolbar-height) + var(--bookmarks-bar-height))')
+    } else root.removeProperty('--chrome-top')
+  }, [showBookmarksBar])
   // Favorites are global (app-wide) and rendered in the native Bookmarks menu.
   // The chrome keeps the tree only to drive the address-bar star; main pushes it.
   const [bookmarks, setBookmarks] = useState<BookmarkNode[]>([])
@@ -178,6 +188,9 @@ function App(): React.JSX.Element {
       // (later changes arrive on the tabs-changed push below).
       const fres = await run('list-tab-folders')
       if (fres.ok) setFolders((fres.folders as TabFolder[]) ?? [])
+      // Same for the bookmarks bar: its bit rides tabs-changed, seed it here.
+      const sres = await run('get-settings')
+      if (sres.ok) setBookmarksBar(sres.bookmarksBarVisible === true)
     }
     void load()
     // Main pushes on every tab change (new / close / select / navigate / panel
@@ -187,6 +200,7 @@ function App(): React.JSX.Element {
       setActiveId(state.activeId)
       setPanelCollapsed(state.panelCollapsed)
       setChromeHidden(state.chromeHidden)
+      setBookmarksBar(state.bookmarksBar === true)
       setFolders(state.folders)
       syncAddressBar(state.tabs, state.activeId)
     })
@@ -614,6 +628,7 @@ function App(): React.JSX.Element {
           <AppMenuButton />
         </div>
       )}
+      {showBookmarksBar && <BookmarksBar tree={bookmarks} />}
       <div className="body">
         {!panelCollapsed && (
           <Sidebar

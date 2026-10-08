@@ -52,8 +52,15 @@ describe('normalizeSettings', () => {
       llm: { provider: 'anthropic-api', apiKey: 'k' },
       sidebarWidth: 300,
       skillPaneWidth: SKILL_PANE_WIDTH.max,
-      magnifierEnabled: false
+      magnifierEnabled: false,
+      bookmarksBarVisible: false
     })
+  })
+
+  it('reads bookmarksBarVisible only as an explicit true (hidden by default)', () => {
+    expect(normalizeSettings({ bookmarksBarVisible: true }).bookmarksBarVisible).toBe(true)
+    expect(normalizeSettings({}).bookmarksBarVisible).toBe(false)
+    expect(normalizeSettings({ bookmarksBarVisible: 'yes' }).bookmarksBarVisible).toBe(false)
   })
 
   it('reads magnifierEnabled only as an explicit true (off is the safe default)', () => {

@@ -309,3 +309,17 @@ export function importChromeTree(chrome: unknown, newId: () => string): Bookmark
   }
   return tree
 }
+
+/** Replace folder `id` by its own children, in place (same parent, same spot):
+ * the inverse of grouping. Throws on an unknown id or a url node. Pure. */
+export function unwrapFolder(tree: BookmarkTree, id: string): BookmarkTree {
+  const node = findNode(tree, id)
+  if (!node) throw new Error(`unknown folder: ${id}`)
+  if (node.kind !== 'folder') throw new Error(`not a folder: ${id}`)
+  const unwrap = (list: BookmarkNode[]): BookmarkNode[] =>
+    list.flatMap((n) => {
+      if (n.id === id && n.kind === 'folder') return n.children
+      return n.kind === 'folder' ? [{ ...n, children: unwrap(n.children) }] : [n]
+    })
+  return unwrap(tree)
+}

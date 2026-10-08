@@ -7,7 +7,7 @@
   position: fixed;
   left: 0;
   right: 0;
-  top: var(--toolbar-height);
+  top: var(--chrome-top, var(--toolbar-height));
   bottom: var(--statusbar-height);
   z-index: 80;
   display: flex;

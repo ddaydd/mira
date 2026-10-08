@@ -78,35 +78,40 @@ function setup(): {
       llm: { provider: 'claude-cli' },
       sidebarWidth: 240,
       skillPaneWidth: 360,
-      magnifierEnabled: false
+      magnifierEnabled: false,
+      bookmarksBarVisible: false
     }),
     setLlmConfig: (llm) => ({
       homeUrl: 'home',
       llm,
       sidebarWidth: 240,
       skillPaneWidth: 360,
-      magnifierEnabled: false
+      magnifierEnabled: false,
+      bookmarksBarVisible: false
     }),
     setSidebarWidth: (width) => ({
       homeUrl: 'home',
       llm: { provider: 'claude-cli' },
       sidebarWidth: width,
       skillPaneWidth: 360,
-      magnifierEnabled: false
+      magnifierEnabled: false,
+      bookmarksBarVisible: false
     }),
     setSkillPaneWidth: (width) => ({
       homeUrl: 'home',
       llm: { provider: 'claude-cli' },
       sidebarWidth: 240,
       skillPaneWidth: width,
-      magnifierEnabled: false
+      magnifierEnabled: false,
+      bookmarksBarVisible: false
     }),
     setHomeUrl: (url: string) => ({
       homeUrl: url,
       llm: { provider: 'claude-cli' },
       sidebarWidth: 240,
       skillPaneWidth: 360,
-      magnifierEnabled: false
+      magnifierEnabled: false,
+      bookmarksBarVisible: false
     }),
     diskUsage: () => ({ root: '/fake', total: 0, reclaimable: 0, entries: [], profiles: [] }),
     cookieJarForProfile: () => ({ set: () => Promise.resolve() }),
@@ -230,6 +235,9 @@ function setup(): {
     toggleTabsPanel: (collapsed?: boolean) => ({ collapsed: collapsed ?? true }),
     showTabMenu: () => {},
     showAppMenu: () => {},
+    ungroupBookmarkFolder: () => ({ moved: 0 }),
+    setBookmarksBarVisible: () => ({ visible: false }),
+    showBookmarksMenu: () => {},
     importChromeBookmarks: () => {
       throw new Error('unused')
     },

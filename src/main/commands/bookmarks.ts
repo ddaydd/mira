@@ -38,6 +38,9 @@ export interface BookmarkContext {
   /** Open a url favorite in a new tab of the target window and focus it. Throws on
    * an unknown id, a folder id, or when there is no target window. */
   openBookmark: (id: string) => { tabId: string; url: string }
+  /** Dissolve a folder: its children take its place. Throws on an unknown id or
+   * a url id. */
+  ungroupBookmarkFolder: (id: string) => { moved: number }
   /** Read a Chrome profile's `Bookmarks` file and add its whole tree as ONE new
    * top-level folder `title`, in profile `to` (default: the target window's).
    * Throws on an unknown profile or an unreadable file. */
@@ -180,6 +183,20 @@ export const bookmarksCommands: CommandMap<CommandContext> = {
   'list-bookmarks': (ctx) => {
     const { tree } = ctx.listBookmarks()
     return { ok: true, tree }
+  },
+
+  // Undo a grouping: the folder disappears, its contents move up one level in
+  // its place (e.g. flatten an import folder onto the top level / the bar).
+  'ungroup-bookmark-folder': (ctx, params) => {
+    const { id } = (params ?? {}) as Partial<BookmarkIdParams>
+    if (typeof id !== 'string' || id.trim() === '') {
+      return { ok: false, error: 'missing "id"' }
+    }
+    try {
+      return { ok: true, id: id.trim(), ...ctx.ungroupBookmarkFolder(id.trim()) }
+    } catch (error) {
+      return fail(error)
+    }
   },
 
   // Bring a Chrome profile's favorites over, as one folder (non-destructive: the

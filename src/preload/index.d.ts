@@ -43,6 +43,8 @@ export interface TabsState {
    * are hidden. Rides this channel because it is a chrome layout bit like
    * panelCollapsed. */
   chromeHidden: boolean
+  /** Whether the bookmarks bar is shown (app-wide setting), a layout bit too. */
+  bookmarksBar: boolean
 }
 
 /** A favorites tree node (mirrors BookmarkNode in the registry). The full tree

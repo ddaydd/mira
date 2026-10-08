@@ -477,6 +477,7 @@ app.whenReady().then(async () => {
     homeUrl: initialSettings.homeUrl,
     initialLlm: initialSettings.llm,
     magnifierEnabled: initialSettings.magnifierEnabled,
+    bookmarksBarVisible: initialSettings.bookmarksBarVisible,
     preloadPath,
     userDataDir: app.getPath('userData'),
     ...(process.platform === 'linux' ? { icon } : {}),
@@ -585,6 +586,9 @@ app.whenReady().then(async () => {
       // Cmd+Shift+H: zen mode — hide/show the toolbar, status bar, and both panels
       // at once. Same bus as the socket / MCP (no arg → flip).
       toggleZen: () => runDetached('toggle-zen', {}, profiles.contextForFocused()),
+      toggleBookmarksBar: () =>
+        runDetached('toggle-bookmarks-bar', {}, profiles.contextForFocused()),
+      bookmarksBarVisible: () => profiles.bookmarksBarVisible(),
       revealTab: () => runDetached('reveal-tab', {}, profiles.contextForFocused()),
       moveTabToTop: () => runDetached('move-tab-to-top', {}, profiles.contextForFocused()),
       // Route the accelerators through the registry so they hit the same bus as

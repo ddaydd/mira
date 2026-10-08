@@ -98,10 +98,12 @@ import {
   moveNode,
   findNode,
   findUrl as findBookmarkUrl,
+  unwrapFolder,
   type BookmarkTree,
   type BookmarkNode,
   type BookmarkUrl
 } from '../bookmark-store'
+import { bookmarksMenuItems } from '../bookmarks-bar'
 import {
   recordVisit as recordVisitPure,
   recentHistory,
@@ -351,6 +353,7 @@ export function makeContext(
   const magnifierFlashes: string[] = []
   // The Cmd+scroll gesture gate (app setting). Boxed so the ctx closures share it.
   const magnifierEnabled = { value: false }
+  const bookmarksBar = { visible: false }
   // Folders whose name field was requested (create-tab-folder with edit: true).
   const folderEdits: string[] = []
   const revealedTabs: string[] = []
@@ -530,12 +533,14 @@ export function makeContext(
     sidebarWidth: number
     skillPaneWidth: number
     magnifierEnabled: boolean
+    bookmarksBarVisible: boolean
   } => ({
     homeUrl: state.homeUrl,
     llm: state.llm,
     sidebarWidth: state.sidebarWidth,
     skillPaneWidth: state.skillPaneWidth,
-    magnifierEnabled: magnifierEnabled.value
+    magnifierEnabled: magnifierEnabled.value,
+    bookmarksBarVisible: bookmarksBar.visible
   })
   // Vault (encrypted-profile) state: which fake profiles are encrypted, and which
   // are unlocked this "session". The real ones shell out to hdiutil + fs.
@@ -2027,6 +2032,20 @@ export function makeContext(
     moveBookmark: (id: string, parentId: string | null, index?: number) => {
       state.bookmarks = moveNode(state.bookmarks, id, parentId, index)
       return { moved: true }
+    },
+    ungroupBookmarkFolder: (id: string) => {
+      const folder = findNode(state.bookmarks, id)
+      state.bookmarks = unwrapFolder(state.bookmarks, id)
+      return { moved: folder?.kind === 'folder' ? folder.children.length : 0 }
+    },
+    // Bookmarks bar: a flag for the toggle; the dropdown only validates its
+    // target (the native popup is untested), via the real pure item builder.
+    setBookmarksBarVisible: (visible?: boolean) => {
+      bookmarksBar.visible = visible ?? !bookmarksBar.visible
+      return { visible: bookmarksBar.visible }
+    },
+    showBookmarksMenu: ({ folderId, fromIndex }) => {
+      bookmarksMenuItems(state.bookmarks, folderId, fromIndex)
     },
     // Extensions slice: an in-memory per-profile store mirroring the real
     // ExtensionsService (per-session sets, D2). The FOCUSED profile is the

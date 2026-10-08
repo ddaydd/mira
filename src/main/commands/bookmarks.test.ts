@@ -290,3 +290,32 @@ describe('import-chrome-bookmarks', () => {
     expect(result).toMatchObject({ ok: false })
   })
 })
+
+describe('ungroup-bookmark-folder', () => {
+  it('moves the folder contents up in its place', () => {
+    const { ctx, bookmarks } = makeContext()
+    const registry = createCommandRegistry()
+    const f = registry.execute('add-folder', { title: 'Imported' }, ctx) as unknown as {
+      node: { id: string }
+    }
+    registry.execute('add-bookmark', { url: 'https://x.com', parentId: f.node.id }, ctx)
+    expect(registry.execute('ungroup-bookmark-folder', { id: f.node.id }, ctx)).toEqual({
+      ok: true,
+      id: f.node.id,
+      moved: 1
+    })
+    expect(bookmarks().map((n) => n.kind)).toEqual(['url'])
+  })
+
+  it('requires an id and reports a bad one', () => {
+    const { ctx } = makeContext()
+    const registry = createCommandRegistry()
+    expect(registry.execute('ungroup-bookmark-folder', {}, ctx)).toEqual({
+      ok: false,
+      error: 'missing "id"'
+    })
+    expect(registry.execute('ungroup-bookmark-folder', { id: 'nope' }, ctx)).toMatchObject({
+      ok: false
+    })
+  })
+})

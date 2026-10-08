@@ -20,6 +20,7 @@ import {
   moveNode,
   findNode,
   flatten,
+  unwrapFolder,
   findUrl as findBookmarkUrl
 } from './bookmark-store'
 
@@ -98,6 +99,15 @@ export class BookmarksController {
     this.tree = insertNode(this.tree, null, node)
     this.commit()
     return { node, urls: flatten(children).length }
+  }
+
+  /** Dissolve folder `id`: its children take its place. Returns how many nodes
+   * moved up. Throws (via unwrapFolder) on an unknown id or a url node. */
+  ungroup(id: string): { moved: number } {
+    const node = findNode(this.tree, id)
+    this.tree = unwrapFolder(this.tree, id)
+    this.commit()
+    return { moved: node?.kind === 'folder' ? node.children.length : 0 }
   }
 
   /** The url of a url-favorite by id, for opening it in a tab. Throws on an unknown

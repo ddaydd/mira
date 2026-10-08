@@ -48,6 +48,7 @@ import type { TabFoldersContext } from './tab-folders'
 import type { TabMemoryContext } from './tab-memory'
 import type { TabMenuContext } from './tab-menu'
 import type { AppMenuContext } from './app-menu'
+import type { BookmarksBarContext } from './bookmarks-bar'
 import type { TabTidyContext } from './tab-tidy'
 import type { TabsContext } from './tabs'
 import type { ThemeContext } from './themes'
@@ -99,6 +100,7 @@ export type CommandContext = AppContext &
   TabMemoryContext &
   TabMenuContext &
   AppMenuContext &
+  BookmarksBarContext &
   TabTidyContext &
   TabTopContext &
   TabsContext &

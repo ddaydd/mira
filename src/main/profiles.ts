@@ -108,6 +108,11 @@ import { type LlmConfig, type ChatMessage, type PageContext } from './llm'
 import { LlmRunner } from './llm-runner'
 import { type BookmarkTree, importChromeTree } from './bookmark-store'
 import { defaultChromeUserDataDir } from './chrome-import'
+import {
+  bookmarksMenuItems,
+  topChromeHeight,
+  type BookmarkMenuItem
+} from './bookmarks-bar'
 import { BookmarksController } from './bookmarks-controller'
 import {
   type Profile,
@@ -275,7 +280,8 @@ import {
   withLlm,
   withSidebarWidth,
   withSkillPaneWidth,
-  withMagnifierEnabled
+  withMagnifierEnabled,
+  withBookmarksBarVisible
 } from './settings-store'
 
 /** Sentinel URL of the internal Settings tab (like chrome://settings). It never
@@ -528,6 +534,8 @@ export interface ProfileManagerDeps {
   /** Whether the Cmd+scroll page-zoom gesture is armed at startup (persisted
    * setting, off by default — see settings-store.ts). */
   magnifierEnabled: boolean
+  /** Persisted bookmarks-bar visibility (app-wide). */
+  bookmarksBarVisible: boolean
   preloadPath: string
   icon?: string
   /** The app's userData directory. Vault paths (the per-profile encrypted image and
@@ -783,7 +791,8 @@ export class ProfileManager {
       llm: deps.initialLlm,
       sidebarWidth: deps.sidebarWidth,
       skillPaneWidth: deps.skillPaneWidth,
-      magnifierEnabled: deps.magnifierEnabled
+      magnifierEnabled: deps.magnifierEnabled,
+      bookmarksBarVisible: deps.bookmarksBarVisible
     }
     this.startActivationTrace()
     this.checker()
@@ -3150,11 +3159,16 @@ export class ProfileManager {
     // Zen (focus) mode hides the toolbar AND the status bar: the chrome removes
     // both from the DOM (App.tsx), so the native view must fill the space they
     // left — start at y=0 and take the full window height.
-    const topChrome = pw.chromeHidden ? 0 : this.deps.toolbarHeight
+    // The bookmarks bar, when shown, adds its strip under the toolbar.
+    const topChrome = topChromeHeight(
+      this.deps.toolbarHeight,
+      this.appSettings.bookmarksBarVisible,
+      pw.chromeHidden
+    )
     // The status bar sits at the very bottom of the chrome; leave room for it so
     // the native view doesn't cover it (see CLAUDE.md, "les deux pièges") — unless
     // zen mode hid it too.
-    const verticalChrome = pw.chromeHidden ? 0 : this.deps.toolbarHeight + this.deps.statusBarHeight
+    const verticalChrome = pw.chromeHidden ? 0 : topChrome + this.deps.statusBarHeight
     // The skill pane, when open, sits on the RIGHT: shrink the view's width by it
     // so the pane is beside the page, not hidden behind the native layer.
     const paneRight = pw.skillPane.open ? this.appSettings.skillPaneWidth : 0
@@ -3344,6 +3358,8 @@ export class ProfileManager {
       // Zen mode rides the tabs channel (like panelCollapsed): both are chrome
       // layout bits, so the renderer learns to hide/show the bars for free.
       chromeHidden: pw.chromeHidden,
+      // The bookmarks bar is a chrome layout bit too (app-wide setting).
+      bookmarksBar: this.appSettings.bookmarksBarVisible,
       // Folder metadata rides the same channel so the sidebar groups tabs by
       // folder and reflects collapse/rename without a separate poll.
       folders: pw.folders
@@ -4840,6 +4856,47 @@ export class ProfileManager {
     evalInWebContents(wc, js).catch(() => {})
   }
 
+  /** Show / hide the bookmarks bar app-wide (undefined flips): persist, then
+   * re-lay out every window (the web view moves down / up by the strip) and push
+   * the bit to each chrome so it renders / drops the strip. */
+  private setBookmarksBarVisible(visible?: boolean): { visible: boolean } {
+    const next = visible ?? !this.appSettings.bookmarksBarVisible
+    if (next !== this.appSettings.bookmarksBarVisible) {
+      this.appSettings = withBookmarksBarVisible(this.appSettings, next)
+      this.deps.persistSettings(this.appSettings)
+      for (const pw of this.openById.values()) {
+        this.layout(pw)
+        this.pushTabs(pw)
+      }
+      this.deps.onBookmarksChange?.()
+    }
+    return { visible: next }
+  }
+
+  /** Pop the native dropdown of a bar folder (or the strip's overflow) of this
+   * window's profile. A pick opens the page in the active tab, as Chrome's bar
+   * does; the item list is pure (bookmarksMenuItems). */
+  private showBookmarksMenuIn(
+    pw: ProfileWindow,
+    folderId: string | undefined,
+    fromIndex: number | undefined,
+    at: { x: number; y: number } | undefined
+  ): void {
+    if (pw.window.isDestroyed()) return
+    const items = bookmarksMenuItems(this.bookmarksFor(pw.id).get(), folderId, fromIndex)
+    const chrome = pw.window.webContents
+    const toTemplate = (item: BookmarkMenuItem): MenuItemConstructorOptions =>
+      item.type === 'empty'
+        ? { label: '(empty)', enabled: false }
+        : item.type === 'folder'
+          ? { label: item.label, submenu: item.items.map(toTemplate) }
+          : {
+              label: item.label,
+              click: () => this.deps.runCommand?.(chrome, 'navigate', { url: item.url })
+            }
+    Menu.buildFromTemplate(items.map(toTemplate)).popup({ window: pw.window, ...at })
+  }
+
   /** Arm / disarm the Cmd+scroll page-zoom gesture app-wide: persist the setting
    * and push the new gate into every live page's shim. Disarming also snaps every
    * magnified tab back to 100% — with the gesture gone, Cmd+wheel could no longer
@@ -5398,6 +5455,11 @@ export class ProfileManager {
   /** The FOCUSED profile's favorites tree, for the native Bookmarks menu (menu.ts,
    * via index.ts). The menu is app-global but shows one profile at a time; it is
    * rebuilt on focus change (onChange), so it always mirrors the front window. */
+  /** Whether the bookmarks bar is shown (for the View menu's check mark). */
+  bookmarksBarVisible(): boolean {
+    return this.appSettings.bookmarksBarVisible
+  }
+
   listBookmarksTree(): BookmarkTree {
     // openById is keyed by windowId now, so fall back to a window's PROFILE id.
     const id = this.focusedId() ?? this.openById.values().next().value?.id
@@ -6892,6 +6954,12 @@ export class ProfileManager {
       moveBookmark: (id, parentId, index) => bookmarks().move(id, parentId, index),
       listBookmarks: () => ({ tree: bookmarks().get() }),
       openBookmark: (id) => this.openBookmarkIn(target, id),
+      ungroupBookmarkFolder: (id) => bookmarks().ungroup(id),
+      setBookmarksBarVisible: (visible) => this.setBookmarksBarVisible(visible),
+      showBookmarksMenu: ({ folderId, fromIndex, at }) => {
+        if (!target) throw new Error('no target window')
+        this.showBookmarksMenuIn(target, folderId, fromIndex, at)
+      },
       importChromeBookmarks: ({ profileDir, userDataDir, title, to }) => {
         if (to !== undefined && !findById(this.profiles, to)) {
           throw new Error(`unknown profile: ${to}`)

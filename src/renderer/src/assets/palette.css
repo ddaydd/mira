@@ -10,7 +10,7 @@
   justify-content: center;
   align-items: flex-start;
   /* Drop below the toolbar so the address bar stays visible/uncovered. */
-  padding-top: calc(var(--toolbar-height) + 8vh);
+  padding-top: calc(var(--chrome-top, var(--toolbar-height)) + 8vh);
   background: var(--scrim);
   -webkit-app-region: no-drag;
 }

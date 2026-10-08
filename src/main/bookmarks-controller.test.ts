@@ -132,3 +132,22 @@ describe('BookmarksController.importFolder', () => {
     expect(persist).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('BookmarksController.ungroup', () => {
+  it('dissolves a folder in one commit and counts what moved up', () => {
+    const { ctrl, persist } = make([
+      {
+        id: 'f',
+        kind: 'folder',
+        title: 'Imported',
+        children: [
+          { id: 'x', kind: 'url', title: 'X', url: 'https://x.com' },
+          { id: 'y', kind: 'url', title: 'Y', url: 'https://y.com' }
+        ]
+      }
+    ])
+    expect(ctrl.ungroup('f')).toEqual({ moved: 2 })
+    expect(ctrl.get().map((n) => n.id)).toEqual(['x', 'y'])
+    expect(persist).toHaveBeenCalledTimes(1)
+  })
+})

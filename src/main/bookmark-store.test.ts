@@ -11,6 +11,7 @@ import {
   normalizeBookmarks,
   importAtlasTree,
   importChromeTree,
+  unwrapFolder,
   type BookmarkNode
 } from './bookmark-store'
 
@@ -201,5 +202,27 @@ describe('importChromeTree', () => {
   it('returns an empty tree for anything that is not a Bookmarks file', () => {
     expect(importChromeTree(null, counter())).toEqual([])
     expect(importChromeTree({ nope: 1 }, counter())).toEqual([])
+  })
+})
+
+describe('unwrapFolder', () => {
+  it('puts the children where the folder was', () => {
+    const tree = [
+      url('a', 'https://a.com'),
+      folder('f', [url('b', 'https://b.com'), url('c', 'https://c.com')]),
+      url('d', 'https://d.com')
+    ]
+    expect(unwrapFolder(tree, 'f').map((n) => n.id)).toEqual(['a', 'b', 'c', 'd'])
+  })
+
+  it('works on a nested folder', () => {
+    const tree = [folder('p', [folder('f', [url('b', 'https://b.com')])])]
+    expect(unwrapFolder(tree, 'f')).toEqual([folder('p', [url('b', 'https://b.com')])])
+  })
+
+  it('throws on an unknown id or a url', () => {
+    const tree = [url('a', 'https://a.com')]
+    expect(() => unwrapFolder(tree, 'x')).toThrow(/unknown folder/)
+    expect(() => unwrapFolder(tree, 'a')).toThrow(/not a folder/)
   })
 })

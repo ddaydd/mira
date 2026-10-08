@@ -28,6 +28,10 @@ export interface AppMenuHandlers {
   /** Toggle zen (focus) mode (Cmd+Shift+H) in the focused window: hide/show the
    * toolbar, status bar, and both side panels at once. Wired to toggle-zen. */
   toggleZen: () => void
+  /** Show/hide the bookmarks bar (Cmd+Shift+B), app-wide. Wired to
+   * toggle-bookmarks-bar; the menu reads `bookmarksBarVisible` for its check. */
+  toggleBookmarksBar: () => void
+  bookmarksBarVisible: () => boolean
   /** Show where the active tab sits in the sidebar (Cmd+Shift+E): shows the
    * sidebar, expands its folder, scrolls to the row and flashes it. */
   revealTab: () => void
@@ -475,6 +479,14 @@ export function appMenuTemplate(handlers: AppMenuHandlers): MenuItemConstructorO
           label: 'Toggle AI Panel',
           accelerator: 'CmdOrCtrl+J',
           click: () => handlers.toggleSkillPane()
+        },
+        {
+          label: 'Show Bookmarks Bar',
+          type: 'checkbox',
+          // Rebuilt on every bookmarks change, a toggle included, so it stays true.
+          checked: handlers.bookmarksBarVisible() === true,
+          accelerator: 'CmdOrCtrl+Shift+B',
+          click: () => handlers.toggleBookmarksBar()
         },
         {
           // Zen mode: hide toolbar + status bar + both panels in one shot; toggle

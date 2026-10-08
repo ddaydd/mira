@@ -81,7 +81,7 @@
    they track the panel as it resizes. */
 .resize-handle {
   position: fixed;
-  top: var(--toolbar-height);
+  top: var(--chrome-top, var(--toolbar-height));
   bottom: var(--statusbar-height);
   width: 6px;
   z-index: 60;

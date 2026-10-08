@@ -22,6 +22,9 @@ export interface AppSettings {
    * default: the gesture fires too easily while scrolling with Cmd held, so it is
    * armed on demand via the toolbar toggle beside the address bar. */
   magnifierEnabled: boolean
+  /** Whether the bookmarks bar (a strip of top-level favorites under the
+   * toolbar) is shown. Off by default: Mira's own model is the Bookmarks menu. */
+  bookmarksBarVisible: boolean
 }
 
 /** Allowed range + default for each resizable panel width. Main clamps to these
@@ -61,7 +64,8 @@ export function defaultSettings(): AppSettings {
     llm: defaultLlm(),
     sidebarWidth: SIDEBAR_WIDTH.default,
     skillPaneWidth: SKILL_PANE_WIDTH.default,
-    magnifierEnabled: false
+    magnifierEnabled: false,
+    bookmarksBarVisible: false
   }
 }
 
@@ -96,7 +100,8 @@ export function normalizeSettings(raw: unknown): AppSettings {
     skillPaneWidth: clampWidth(v.skillPaneWidth, SKILL_PANE_WIDTH),
     // Anything but an explicit true (including a legacy file without the key)
     // keeps the gesture off — off is the safe default.
-    magnifierEnabled: v.magnifierEnabled === true
+    magnifierEnabled: v.magnifierEnabled === true,
+    bookmarksBarVisible: v.bookmarksBarVisible === true
   }
 }
 
@@ -124,4 +129,9 @@ export function withSkillPaneWidth(settings: AppSettings, width: number): AppSet
 /** Return settings with the Cmd+scroll page-zoom gesture armed or disarmed. */
 export function withMagnifierEnabled(settings: AppSettings, enabled: boolean): AppSettings {
   return { ...settings, magnifierEnabled: enabled }
+}
+
+/** Return settings with the bookmarks bar shown or hidden. */
+export function withBookmarksBarVisible(settings: AppSettings, visible: boolean): AppSettings {
+  return { ...settings, bookmarksBarVisible: visible }
 }
