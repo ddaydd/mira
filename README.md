@@ -72,8 +72,8 @@ Mira then updates itself. Details, and how to build your own: [`docs/releases.md
 
 No published build: package your own with `npm run build:linux`, which writes a `.deb` and an
 AppImage to `dist/`. Prefer the `.deb` (`sudo apt install ./dist/mira_<version>_amd64.deb`): it
-makes `chrome-sandbox` setuid root, which Chromium needs on Ubuntu (unprivileged user namespaces
-are restricted there), and registers Mira as a candidate default browser. Linux builds do not
+installs an AppArmor profile so Chromium's sandbox can use user namespaces, which Ubuntu 24+
+restricts (falling back to a setuid `chrome-sandbox` where there are none), and registers Mira as a candidate default browser. Linux builds do not
 update themselves.
 
 What differs from macOS:

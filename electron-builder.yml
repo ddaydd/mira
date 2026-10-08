@@ -97,8 +97,9 @@ mac:
 dmg:
   artifactName: ${name}-${version}.${ext}
 linux:
-  # deb first: its postinst makes chrome-sandbox setuid root, which an AppImage
-  # cannot do (it then dies at launch on Ubuntu, or needs --no-sandbox).
+  # deb first: its postinst installs an AppArmor profile that lets Chromium's
+  # sandbox use user namespaces on Ubuntu 24+ (setuid chrome-sandbox elsewhere),
+  # which an AppImage cannot do (it then dies at launch, or needs --no-sandbox).
   target:
     - deb
     - AppImage
@@ -110,9 +111,9 @@ linux:
     - x-scheme-handler/http
     - x-scheme-handler/https
     - text/html
-  desktop:
-    entry:
-      StartupWMClass: Mira
+  # Window ↔ .desktop association (taskbar icon, pinning) on Wayland, where the
+  # app_id comes from package.json desktopName.
+  syncDesktopName: true
 appImage:
   artifactName: ${name}-${version}.${ext}
 npmRebuild: false

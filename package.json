@@ -8,6 +8,7 @@
   },
   "author": "Mickael Faivre-Maçon <faivrem@gmail.com>",
   "homepage": "https://github.com/micktaiwan/mira",
+  "desktopName": "mira.desktop",
   "scripts": {
     "format": "prettier --write .",
     "lint": "eslint --cache .",
