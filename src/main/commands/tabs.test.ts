@@ -40,6 +40,36 @@ describe('new-tab', () => {
     expect(tabState().tabs.map((t) => t.id)).toEqual(['tab-2', 'tab-1'])
   })
 
+  it('opens a lazy background tab asleep (loaded on first selection)', () => {
+    const { ctx, lazyOpens, tabState } = makeContext()
+    const registry = createCommandRegistry()
+    const result = registry.execute(
+      'new-tab',
+      { url: 'example.com', background: true, lazy: true },
+      ctx
+    )
+    expect(result).toMatchObject({ ok: true, id: 'tab-2', loaded: false })
+    expect(lazyOpens).toEqual(['tab-2'])
+    expect(tabState().activeId).toBe('tab-1')
+  })
+
+  it('ignores lazy on a foreground tab: the tab you look at loads now', () => {
+    const { ctx, lazyOpens } = makeContext()
+    const registry = createCommandRegistry()
+    const result = registry.execute('new-tab', { url: 'example.com', lazy: true }, ctx)
+    expect(result).toMatchObject({ ok: true, loaded: true })
+    expect(lazyOpens).toEqual([])
+  })
+
+  it('rejects a non-boolean lazy', () => {
+    const { ctx } = makeContext()
+    const registry = createCommandRegistry()
+    expect(registry.execute('new-tab', { lazy: 1 }, ctx)).toEqual({
+      ok: false,
+      error: '"lazy" must be a boolean'
+    })
+  })
+
   it('rejects a non-boolean background', () => {
     const { ctx } = makeContext()
     const registry = createCommandRegistry()

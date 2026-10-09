@@ -27,6 +27,8 @@ export const BOOLEAN_FLAGS = new Set([
   'new-tab',
   'full',
   'background',
+  // open -b: --lazy creates the tab asleep (loaded on first selection).
+  'lazy',
   // wait: --gone flips the condition (wait for a disappearance).
   'gone',
   // click: --scroll brings an off-screen target into view before clicking.
@@ -298,13 +300,14 @@ export function buildExec(code, tabId) {
  *
  * @param {string} url
  * @param {string|null} tabId
- * @param {{ newTab?: boolean, background?: boolean }} [opts]
+ * @param {{ newTab?: boolean, background?: boolean, lazy?: boolean }} [opts]
  * @returns {{ command: 'navigate', params: object }}
  */
 export function buildNav(url, tabId, opts = {}) {
   const params = { url }
   if (opts.newTab) params.newTab = true
   if (opts.newTab && opts.background) params.background = true
+  if (opts.newTab && opts.background && opts.lazy) params.lazy = true
   if (tabId) params.tabId = tabId
   return { command: 'navigate', params }
 }

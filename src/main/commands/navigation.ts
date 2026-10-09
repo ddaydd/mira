@@ -23,7 +23,7 @@ export interface NavContext {
    * its new tab beside that tab, not in whichever window happens to be focused.
    * `background` leaves it hidden (the window does not switch to it). Throws on
    * an unknown tab. */
-  newTabNearTab: (url: string, tabId: string, background: boolean) => { id: string }
+  newTabNearTab: (url: string, tabId: string, background: boolean, lazy?: boolean) => { id: string }
   /** Reload ONE named tab, wherever it lives (the `reload` counterpart of
    * loadUrlInTab). Without a tab id the caller means the target window's active
    * tab. `ignoreCache` is the Cmd+Shift+R variant. Throws on an unknown tab. */
@@ -71,6 +71,9 @@ export interface NavigateParams {
    * Note this is only about the TAB: no socket/MCP command ever brings Mira to
    * the foreground any more, background or not (see foreground-policy.ts). */
   background?: boolean
+  /** With `newTab` + `background`: create the tab asleep, its page loaded on
+   * first selection (see new-tab). */
+  lazy?: boolean
   /** Explicit target tab (an id from list-tabs), in ANY window. Without it the
    * command acts on the caller's window — the IPC sender, or the focused window
    * for a socket/MCP call — which is only ever right for the UI. The CLI fills
@@ -122,12 +125,15 @@ function reloadCommand(
 
 export const navigationCommands: CommandMap<CommandContext> = {
   navigate: (ctx, params) => {
-    const { url, newTab, background, tabId } = (params ?? {}) as Partial<NavigateParams>
+    const { url, newTab, background, lazy, tabId } = (params ?? {}) as Partial<NavigateParams>
     if (newTab !== undefined && typeof newTab !== 'boolean') {
       return { ok: false, error: '"newTab" must be a boolean' }
     }
     if (background !== undefined && typeof background !== 'boolean') {
       return { ok: false, error: '"background" must be a boolean' }
+    }
+    if (lazy !== undefined && typeof lazy !== 'boolean') {
+      return { ok: false, error: '"lazy" must be a boolean' }
     }
     if (tabId !== undefined && (typeof tabId !== 'string' || tabId.trim() === '')) {
       return { ok: false, error: '"tabId" must be a non-empty string' }
@@ -162,7 +168,7 @@ export const navigationCommands: CommandMap<CommandContext> = {
       const target = tabId.trim()
       try {
         if (newTab === true) {
-          const tab = ctx.newTabNearTab(normalized, target, background === true)
+          const tab = ctx.newTabNearTab(normalized, target, background === true, lazy === true)
           return { ok: true, url: normalized, id: tab.id }
         }
         ctx.loadUrlInTab(normalized, target)
@@ -201,7 +207,7 @@ export const navigationCommands: CommandMap<CommandContext> = {
     }
     if (newTab === true || activeId === null || active?.kind === 'settings') {
       try {
-        const tab = ctx.newTab(normalized, background === true)
+        const tab = ctx.newTab(normalized, background === true, lazy === true)
         return { ok: true, url: normalized, id: tab.id }
       } catch (error) {
         return fail(error)

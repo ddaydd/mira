@@ -55,6 +55,8 @@
 //                                   With SEVERAL profiles open and no --tab/$MIRA_TAB, both refuse
 //                                   to guess a window: pass --window <id> or --profile <id-prefix>.
 //                                   (--background: load it hidden — the window does not switch to it)
+//                                   (--lazy, with -b: create it asleep, loaded on first click —
+//                                    for bulk opens; never for a tab you then drive)
 //                                   (both honour --tab / $MIRA_TAB: the pinned tab's WINDOW is the target)
 // No command here ever brings Mira to the foreground; `mira focus` is the explicit way.
 //   mira focus [--window <id>]      bring one window to the front (default: Mira's last-focused one)
@@ -648,7 +650,11 @@ async function main() {
       const url = positionals[0]
       if (!url) return die('open needs a url', 2)
       return send(
-        buildNav(url, await navTargetTab(), { newTab: true, background: background(flags) }),
+        buildNav(url, await navTargetTab(), {
+          newTab: true,
+          background: background(flags),
+          lazy: flags.lazy === true
+        }),
         {
           json
         }

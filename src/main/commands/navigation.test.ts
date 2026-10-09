@@ -75,6 +75,31 @@ describe('navigate with an explicit tabId', () => {
     expect(tabState().tabs.some((t) => t.id === opened.id)).toBe(true)
   })
 
+  it('opens a lazy background tab asleep, beside the named one or not', () => {
+    const { ctx, lazyOpens, tabState } = makeContext()
+    const registry = createCommandRegistry()
+    const near = registry.execute(
+      'navigate',
+      { url: 'a.test', tabId: 'tab-1', newTab: true, background: true, lazy: true },
+      ctx
+    ) as unknown as { id: string }
+    const loose = registry.execute(
+      'navigate',
+      { url: 'b.test', newTab: true, background: true, lazy: true },
+      ctx
+    ) as unknown as { id: string }
+    expect(lazyOpens).toEqual([near.id, loose.id])
+    expect(tabState().activeId).toBe('tab-1')
+  })
+
+  it('rejects a lazy that is not a boolean', () => {
+    const { ctx } = makeContext()
+    const registry = createCommandRegistry()
+    expect(registry.execute('navigate', { url: 'a.test', newTab: true, lazy: 'yes' }, ctx)).toEqual(
+      { ok: false, error: '"lazy" must be a boolean' }
+    )
+  })
+
   it('skips the dedup: a named target is loaded, never swapped for a twin', () => {
     const { ctx, tabLoads, tabState } = makeContext()
     const registry = createCommandRegistry()

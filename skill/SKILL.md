@@ -58,6 +58,8 @@ mira console --level error --limit 50  # the page's captured console: console.*,
 mira shot /tmp/page.png                # PNG capture of the pinned/active tab (--full = whole page)
 mira reload                            # reload the pinned or active tab (on the error page: retries the failed url)
 mira open example.com [-b]             # OPEN X → new tab, leaves the current tab alone (-b: hidden tab)
+mira open example.com -b --lazy        # tab created ASLEEP, loaded when the user clicks it: for handing
+                                       # the user many tabs at once (never a tab you then drive)
 mira nav example.com                   # "go to X" → loads in place, OVERWRITES the pinned/active tab (-n: new tab)
 mira done                              # close this Claude session's windows (see below)
 mira focus [--window <id>]             # bring ONE window to the front — FORBIDDEN unless explicitly asked

@@ -165,6 +165,17 @@ describe('buildNav — the pinned tab is the target, not the focused window', ()
       params: { url: 'example.com' }
     })
   })
+
+  it('passes lazy only on a background new tab (a visible tab loads at once)', () => {
+    expect(buildNav('example.com', null, { newTab: true, background: true, lazy: true })).toEqual({
+      command: 'navigate',
+      params: { url: 'example.com', newTab: true, background: true, lazy: true }
+    })
+    expect(buildNav('example.com', null, { newTab: true, lazy: true })).toEqual({
+      command: 'navigate',
+      params: { url: 'example.com', newTab: true }
+    })
+  })
 })
 
 describe('buildFocus', () => {

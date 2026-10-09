@@ -707,6 +707,9 @@ export class ProfileManager {
    * a second unlock — the cookie-loss bug). Absent = locked (falls back to the
    * canonical partition). Set on unlock, cleared on lock. See noncePartitionDir. */
   private readonly unlockedPartition = new Map<string, string>()
+  /** Lazy background tabs (Ctrl+click on a link) born asleep: tab id → the opener's
+   * url, replayed as httpReferrer when the first selection loads the page. */
+  private readonly deferredReferrers = new Map<string, string>()
   /** Every currently open window, keyed by its unique windowId. A profile may have
    * several entries here (a torn-off tab lives in its own window of the same
    * profile), so this is NOT keyed by profile id — use windowsForProfile /
@@ -2144,6 +2147,11 @@ export class ProfileManager {
     // layout() then hides every view while it is active, so the chrome's Settings
     // panel (rendered in the body) shows through.
     if (tab.id === pw.settingsTabId) return
+    const deferredReferrer = this.deferredReferrers.get(tab.id)
+    if (deferredReferrer !== undefined) {
+      this.deferredReferrers.delete(tab.id)
+      httpReferrer ??= deferredReferrer
+    }
     const partition = this.effectivePartition(pw.id)
     // Install this session's permission handlers (grant-all + log) before the page
     // loads, so a first geolocation request is answered rather than denied by the
@@ -2249,7 +2257,10 @@ export class ProfileManager {
         tab.id,
         decision.background,
         decision.referrer,
-        decision.post
+        decision.post,
+        // A Ctrl+click tab is born asleep and loads on first selection, like a
+        // restored tab: a burst of them must not load every page at once.
+        decision.background
       )
       return { action: 'deny' }
     })
@@ -2309,7 +2320,8 @@ export class ProfileManager {
     afterId?: string,
     background = false,
     httpReferrer?: string,
-    post?: PostLoad
+    post?: PostLoad,
+    lazy = false
   ): TabMeta {
     const prevActiveId = pw.state.activeId
     const now = Date.now()
@@ -2336,7 +2348,14 @@ export class ProfileManager {
     if (pw.state.activeId === tab.id) pw.state = stampActiveTab(pw.state, now)
     // The active tab may have changed: a pinned tab armed by Cmd+W is disarmed.
     pw.closeArmedId = null
-    this.materializeTab(pw, tab, httpReferrer, post)
+    // lazy (background only): no view yet — selectTabIn materializes it on first
+    // selection, as for a restored tab. A form POST cannot be replayed later, so
+    // it always loads now.
+    if (background && lazy && !post) {
+      if (httpReferrer) this.deferredReferrers.set(tab.id, httpReferrer)
+    } else {
+      this.materializeTab(pw, tab, httpReferrer, post)
+    }
     if (!background) {
       // Only the foreground path changed the active tab; skip the extension notify
       // (and any focusChrome) when opening in background so nothing steals focus.
@@ -3668,6 +3687,7 @@ export class ProfileManager {
     const index = pw.state.tabs.findIndex((t) => t.id === id)
     if (index === -1) throw new Error(`unknown tab: ${id}`)
     console.log(formatTabCloseLog({ reason, tabId: id, windowId: pw.windowId, origin }))
+    this.deferredReferrers.delete(id)
     // Remember the tab so Cmd+Shift+T can reopen it, unless it is the transient
     // Settings tab (chrome, not a page — never worth restoring this way).
     if (id !== pw.settingsTabId) {
@@ -4679,10 +4699,15 @@ export class ProfileManager {
    * it (see NavContext.newTabNearTab). The window is chosen by the target tab,
    * never by focus, which is what makes `mira open` land where a pinned session
    * expects. Never raises the window; `background` also leaves the tab hidden. */
-  private newTabNearTab(url: string, tabId: string, background: boolean): { id: string } {
+  private newTabNearTab(
+    url: string,
+    tabId: string,
+    background: boolean,
+    lazy = false
+  ): { id: string } {
     const pw = this.ownerOf(tabId)
     if (!pw || pw.window.isDestroyed()) throw new Error(`unknown tab: ${tabId}`)
-    const tab = this.newTabIn(pw, url, false, tabId, background)
+    const tab = this.newTabIn(pw, url, false, tabId, background, undefined, undefined, lazy)
     return { id: tab.id }
   }
 
@@ -6294,7 +6319,8 @@ export class ProfileManager {
         }
       },
       loadUrlInTab: (url, tabId) => this.loadUrlInTab(url, tabId),
-      newTabNearTab: (url, tabId, background) => this.newTabNearTab(url, tabId, background),
+      newTabNearTab: (url, tabId, background, lazy) =>
+        this.newTabNearTab(url, tabId, background, lazy),
       reloadTab: (tabId, ignoreCache) => this.reloadTab(tabId, ignoreCache),
       focusAddressBar: () => {
         if (!target || target.window.isDestroyed()) throw new Error('no target window')
@@ -7018,7 +7044,7 @@ export class ProfileManager {
       },
       getSkillPane: () => (target ? target.skillPane : closedSkillPane()),
       writeClipboard: (text: string) => clipboard.writeText(text),
-      newTab: (url, background = false) => {
+      newTab: (url, background = false, lazy = false) => {
         if (!target || target.window.isDestroyed()) throw new Error('no target window')
         // focusChrome: opening a tab (click or Cmd+T) focuses the address bar so a
         // url can be typed straight away — and brings Mira forward. Reserved for
@@ -7031,15 +7057,18 @@ export class ProfileManager {
           url ?? this.appSettings.homeUrl,
           !background && raiseAllowed,
           undefined,
-          background
+          background,
+          undefined,
+          undefined,
+          lazy
         )
-        // A freshly opened tab is always materialized (loaded), a web tab, never
+        // A freshly opened tab is materialized (loaded) unless lazy, a web tab, never
         // born pinned, kept-awake, in a folder, or (yet) making sound. `loading`
         // in this command result is the "not yet" default like `audible`; the
         // live spinner is driven by the pushed tab state (tabInfos), not this.
         return {
           ...tab,
-          loaded: true,
+          loaded: !(background && lazy),
           kind: 'web',
           pinned: false,
           keepAwake: false,

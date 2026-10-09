@@ -81,8 +81,10 @@ export interface TabsContext {
   /** Open a new tab (loading `url`, or the home page) and focus it. When
    * `background` is true the tab is appended WITHOUT becoming active: its page
    * loads hidden and the window is not brought to the foreground — the path for a
-   * socket/MCP caller spinning up a tab to drive (CDP / exec-js) unobtrusively. */
-  newTab: (url?: string, background?: boolean) => TabInfo
+   * socket/MCP caller spinning up a tab to drive (CDP / exec-js) unobtrusively.
+   * `lazy` (with `background`) skips the load: the tab is born asleep and loads
+   * on first selection. */
+  newTab: (url?: string, background?: boolean, lazy?: boolean) => TabInfo
   /** Close a tab. Closing the last one leaves the window empty but open (the
    * window never closes here). Throws on an unknown id. */
   closeTab: (id: string) => { closed: boolean }
@@ -181,6 +183,9 @@ export interface NewTabParams {
   url?: string
   /** Open the tab hidden without switching to it or foregrounding the window. */
   background?: boolean
+  /** With `background`: create the tab asleep, its page loaded on first
+   * selection. For bulk opens a user will look at later, not for a tab to drive. */
+  lazy?: boolean
 }
 
 export interface ListTabsParams {
@@ -260,12 +265,15 @@ export function copyActiveUrl(ctx: CommandContext): CommandResult {
 
 export const tabsCommands: CommandMap<CommandContext> = {
   'new-tab': (ctx, params) => {
-    const { url, background } = (params ?? {}) as Partial<NewTabParams>
+    const { url, background, lazy } = (params ?? {}) as Partial<NewTabParams>
     if (url !== undefined && typeof url !== 'string') {
       return { ok: false, error: '"url" must be a string' }
     }
     if (background !== undefined && typeof background !== 'boolean') {
       return { ok: false, error: '"background" must be a boolean' }
+    }
+    if (lazy !== undefined && typeof lazy !== 'boolean') {
+      return { ok: false, error: '"lazy" must be a boolean' }
     }
     try {
       // Same normalization as `navigate` and the address bar: a bare domain, a
@@ -273,7 +281,7 @@ export const tabsCommands: CommandMap<CommandContext> = {
       // url. Without it a plain path reached loadURL untouched and the tab died
       // on ERR_INVALID_URL — while the identical input worked in `navigate`.
       const target = url?.trim() ? normalizeInput(url) : undefined
-      const tab = ctx.newTab(target, background === true)
+      const tab = ctx.newTab(target, background === true, lazy === true)
       return { ok: true, ...tab }
     } catch (error) {
       return fail(error)

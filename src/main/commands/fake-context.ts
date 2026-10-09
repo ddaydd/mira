@@ -135,6 +135,8 @@ export interface FakeContext {
    * which tab. Kept apart from `loaded` (the active-tab path) precisely so a test
    * can tell an explicitly-targeted navigation from a focus-driven one. */
   tabLoads: Array<{ url: string; tabId: string }>
+  /** Ids of the tabs opened lazy (background + lazy): born asleep. */
+  lazyOpens: string[]
   /** One entry per reloadTab call (reload {tabId} spy). */
   tabReloads: Array<{ tabId: string; ignoreCache: boolean }>
   /** How many times focus-address-bar (Cmd+L) reached the window. */
@@ -294,6 +296,8 @@ export function makeContext(
 ): FakeContext {
   const loaded: string[] = []
   const tabLoads: Array<{ url: string; tabId: string }> = []
+  /** Ids of the tabs opened lazy (background + lazy): born asleep. */
+  const lazyOpens: string[] = []
   const tabReloads: Array<{ tabId: string; ignoreCache: boolean }> = []
   const windowsClosed: string[] = []
   const sessionWindows: Array<{ sessionId: string; pid?: number }> = []
@@ -708,9 +712,10 @@ export function makeContext(
       tabLoads.push({ url, tabId: id })
       return true
     },
-    newTabNearTab: (url: string, tabId: string, background: boolean) => {
+    newTabNearTab: (url: string, tabId: string, background: boolean, lazy?: boolean) => {
       if (!state.tabs.tabs.some((t) => t.id === tabId)) throw new Error(`unknown tab: ${tabId}`)
       const id = `tab-${++state.tabSeq}`
+      if (background && lazy) lazyOpens.push(id)
       const tab = { id, title: '', url, favicon: null }
       state.tabs = background
         ? addTabAfterInactive(state.tabs, tab, tabId)
@@ -1304,8 +1309,9 @@ export function makeContext(
       const last = messages[messages.length - 1]?.text ?? ''
       return Promise.resolve(`answer(${last}|${page.url}|${page.text})`)
     },
-    newTab: (url?: string, background?: boolean) => {
+    newTab: (url?: string, background?: boolean, lazy?: boolean) => {
       const id = `tab-${++state.tabSeq}`
+      if (background && lazy) lazyOpens.push(id)
       const now = Date.now()
       const tab = { id, title: '', url: url ?? state.homeUrl, favicon: null, openedAt: now }
       state.tabs = background ? addTabInactive(state.tabs, tab) : addTab(state.tabs, tab)
@@ -1317,7 +1323,7 @@ export function makeContext(
       const stamped = state.tabs.tabs.find((t) => t.id === id)
       return {
         ...tab,
-        loaded: true,
+        loaded: !(background && lazy),
         kind: 'web' as const,
         pinned: false,
         keepAwake: false,
@@ -2259,6 +2265,7 @@ export function makeContext(
     tracing: () => state.tracing,
     loaded,
     tabLoads,
+    lazyOpens,
     tabReloads,
     addressBarFocuses: () => state.addressBarFocuses,
     windowsClosed,
