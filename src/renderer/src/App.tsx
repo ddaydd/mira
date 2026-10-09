@@ -473,7 +473,9 @@ function App(): React.JSX.Element {
             ⟳
           </button>
           <form className="address-form" onSubmit={onSubmitUrl}>
-            {activeTitleOf(tabs, activeId) && (
+            {/* The title already reads in the tab panel: only show it here when the
+              panel is collapsed. */}
+            {panelCollapsed && activeTitleOf(tabs, activeId) && (
               <span className="address-title" title={activeTitleOf(tabs, activeId)}>
                 {activeTitleOf(tabs, activeId)}
               </span>
