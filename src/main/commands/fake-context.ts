@@ -1615,6 +1615,8 @@ export function makeContext(
     showAudioMenu: () => {},
     showMediaCaptureMenu: () => {},
     resetMediaCapture: () => {},
+    reopenClosedWindow: () => ({ reopened: false }),
+    listClosedWindows: () => [],
     // Tab folders: real in-memory mutations so the tab-folders command tests can
     // observe them (mirrors ProfileManager, minus the native re-layout).
     listTabFolders: () => ({ folders: state.folders }),

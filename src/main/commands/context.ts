@@ -51,6 +51,7 @@ import type { AppMenuContext } from './app-menu'
 import type { BookmarksBarContext } from './bookmarks-bar'
 import type { UiStateContext } from './ui-state'
 import type { MediaCaptureContext } from './media-capture'
+import type { ClosedWindowsContext } from './closed-windows'
 import type { TabTidyContext } from './tab-tidy'
 import type { TabsContext } from './tabs'
 import type { ThemeContext } from './themes'
@@ -105,6 +106,7 @@ export type CommandContext = AppContext &
   BookmarksBarContext &
   UiStateContext &
   MediaCaptureContext &
+  ClosedWindowsContext &
   TabTidyContext &
   TabTopContext &
   TabsContext &

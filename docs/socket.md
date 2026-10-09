@@ -528,6 +528,13 @@ mira call list-extensions   --params '{"profileId":"default"}'
 
 `extension-console` reads a ring buffer of an MV3 service-worker's console output, captured since boot (Mira can't open devtools on a headless SW). All params optional: `id` filters to one extension, `level` is a minimum severity (`verbose` \| `info` \| `warning` \| `error`), `limit` caps to the most recent N (oldest-first), `profileId` picks which profile's session to read (default: the focused window's profile). The `profileId` matters because extensions are per profile: a passkey flow failing in the "pro" profile leaves nothing in the "perso" Bitwarden's worker. Each message is `{ extensionId, seq, level, message, sourceUrl, lineNumber }`; `seq` is monotonic so you can poll for what's new. Use it to see a background worker throw or never run (e.g. a passkey popout hitting an unimplemented `chrome.windows.create`).
 
+### Closed windows
+
+| Command                | Params       | Effect / result |
+| ---------------------- | ------------ | --------------- |
+| `reopen-closed-window` | `profileId?` | reopen the newest window the user closed (of that profile, else any) with its tabs, folders and geometry → `{reopened, windowId?, profileId?, tabs?}`. Kept: the last 10 user windows closed by hand (agent session windows excluded), in `userData/closed-windows.json`, so it survives a restart. `reopen-closed-tab` (Cmd+Shift+T) reopens such a window first when it closed after the window's last closed tab (then answers `windowId`). |
+| `list-closed-windows`  | —            | `{windows:[{profileId, closedAt, windowId, tabs, titles}]}`, newest first |
+
 ### Permissions
 
 | Command                                                                              | Params | Effect / result              |

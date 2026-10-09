@@ -275,6 +275,7 @@ import {
   type InputKind
 } from './input-delivery'
 import { SessionWindowRegistry, firstUserWindow, sessionWindowProfile } from './session-windows'
+import { ClosedWindowStore, reopenWindowFirst, type ClosedWindow } from './closed-windows'
 import { inputReadiness, underlaysSurvive, viewShown } from './input-underlay'
 import { locationAuthStatus, requestLocationAuthorization } from './mac-location'
 import { extractionScript, type SkillSource } from './skills'
@@ -358,6 +359,9 @@ interface ClosedTab {
   keepAwake: boolean
   /** The tab's index in the strip when it was closed, to restore its position. */
   index: number
+  /** When it was closed: Cmd+Shift+T reopens a closed WINDOW instead when that
+   * window closed later (closed-windows.ts). */
+  closedAt: number
 }
 
 /** How many closed tabs a window remembers for reopen (Cmd+Shift+T). A small,
@@ -728,6 +732,14 @@ export class ProfileManager {
    * which CLAUDE_CODE_SESSION_ID, and the timer that closes the window of a
    * session whose process has exited. */
   private readonly sessionWindowRegistry = new SessionWindowRegistry()
+  /** Recently closed user windows, persisted (closed-windows.ts). Lazy: userData
+   * is only known once the app is ready. */
+  private closedWindowStore: ClosedWindowStore | null = null
+  private get closedWindows(): ClosedWindowStore {
+    return (this.closedWindowStore ??= new ClosedWindowStore(
+      join(app.getPath('userData'), 'closed-windows.json')
+    ))
+  }
   private sessionReaper: ReturnType<typeof setInterval> | null = null
   private static readonly SESSION_REAP_MS = 30_000
   /** yt-dlp video downloads in flight, keyed by a unique id, with when each
@@ -1899,7 +1911,26 @@ export class ProfileManager {
       // have other windows?" check below excludes the one that just closed.
       this.openById.delete(windowId)
       if (this.lastFocusedWindowId === windowId) this.lastFocusedWindowId = null
-      const othersRemain = this.windowsForProfile(profile.id).length > 0
+      // Only the USER's windows count: an agent session window is scratch space,
+      // never saved — counting it made closing the main window (while a Claude
+      // session window was open) forget the main window and all its tabs.
+      const isAgentWindow = this.sessionWindowRegistry.owns(windowId)
+      const othersRemain =
+        this.windowsForProfile(profile.id).filter(
+          (w) => !this.sessionWindowRegistry.owns(w.windowId)
+        ).length > 0
+      // Remember a user window closed by hand, so it can be reopened (Chrome's
+      // "Reopen closed window"). Its entry was just refreshed by the 'close' save.
+      if (!this.quitting && !this.lockingAll && !isAgentWindow) {
+        const entry = this.savedEntry(profileWindow)
+        if (entry) {
+          this.closedWindows.push({
+            profileId: profile.id,
+            closedAt: Date.now(),
+            window: { ...entry, open: false }
+          })
+        }
+      }
       if (this.quitting) {
         // App quit: leave the open flag alone (the 'close' snapshot recorded it
         // open:true), so this window reopens next launch. See the `quitting` flag.
@@ -3590,7 +3621,8 @@ export class ProfileManager {
         favicon: closing.favicon,
         pinned: closing.pinned === true,
         keepAwake: closing.keepAwake === true,
-        index
+        index,
+        closedAt: Date.now()
       })
       if (pw.closedTabs.length > CLOSED_TAB_STACK_LIMIT) pw.closedTabs.shift()
     }
@@ -3691,7 +3723,15 @@ export class ProfileManager {
     reopened: boolean
     id: string | null
     url?: string
+    windowId?: string
   } {
+    // A window closed after this window's last closed tab comes back first, like
+    // Chrome's Cmd+Shift+T.
+    const lastTabAt = pw.closedTabs.at(-1)?.closedAt ?? null
+    if (reopenWindowFirst(lastTabAt, this.closedWindows.lastAt(pw.id))) {
+      const r = this.reopenClosedWindow(pw.id)
+      if (r.reopened) return { reopened: true, id: null, windowId: r.windowId }
+    }
     const closed = pw.closedTabs.pop()
     if (!closed) return { reopened: false, id: null }
     const now = Date.now()
@@ -3718,6 +3758,57 @@ export class ProfileManager {
     this.pushTabs(pw)
     this.saveSession(pw)
     return { reopened: true, id: tab.id, url: tab.url }
+  }
+
+  /** Reopen the most recently closed user window (of `profileId`, else of any
+   * profile): a new window restoring its saved tabs, folders and geometry. A no-op
+   * (reopened:false) when none is left. */
+  reopenClosedWindow(profileId?: string): {
+    reopened: boolean
+    windowId?: string
+    profileId?: string
+    tabs?: number
+  } {
+    const unlocked = new Set(this.unlockedVaults.keys())
+    // Skip (and drop) entries whose profile is gone or locked: nothing can open them.
+    for (;;) {
+      const entry = this.closedWindows.take(profileId)
+      if (!entry) return { reopened: false }
+      const profile = findById(this.profiles, entry.profileId)
+      if (!profile || needsUnlock(profile, unlocked)) continue
+      // Already back on screen (the profile's last window, reopened since from its
+      // saved entry): a second copy would share its windowId.
+      if (this.openById.has(entry.window.windowId)) continue
+      const pw = this.create(profile, { saved: { ...entry.window, open: true }, content: 'restore' })
+      this.saveSession(pw)
+      this.deps.onChange?.()
+      return {
+        reopened: true,
+        windowId: pw.windowId,
+        profileId: profile.id,
+        tabs: entry.window.tabs.length
+      }
+    }
+  }
+
+  /** The recently closed user windows, newest first (for menus and the socket). */
+  listClosedWindows(): Array<{
+    profileId: string
+    closedAt: number
+    windowId: string
+    tabs: number
+    titles: string[]
+  }> {
+    return this.closedWindows
+      .all()
+      .reverse()
+      .map((c: ClosedWindow) => ({
+        profileId: c.profileId,
+        closedAt: c.closedAt,
+        windowId: c.window.windowId,
+        tabs: c.window.tabs.length,
+        titles: c.window.tabs.slice(0, 5).map((t) => t.title || t.url)
+      }))
   }
 
   /** Close the active tab (Cmd+W). A pinned tab must be pressed twice in a
@@ -7057,6 +7148,8 @@ export class ProfileManager {
         this.showMediaCaptureMenuIn(target)
       },
       resetMediaCapture: (tabId) => this.resetMediaCapture(tabId),
+      reopenClosedWindow: (profileId) => this.reopenClosedWindow(profileId),
+      listClosedWindows: () => this.listClosedWindows(),
       listTabFolders: () => ({ folders: target ? target.folders : [] }),
       createTabFolder: (title, tabId, edit) => {
         if (!target) throw new Error('no target window')

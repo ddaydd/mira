@@ -158,7 +158,9 @@ export interface TabsContext {
    * pinned state) and focusing it. Returns the new tab id + url, or reopened:false
    * with a null id when the stack is empty. The Settings tab is never recorded, so
    * it never comes back this way. */
-  reopenClosedTab: () => { reopened: boolean; id: string | null; url?: string }
+  /** `windowId` is set when a closed WINDOW came back instead (it closed after
+   * the window's last closed tab, see closed-windows.ts). */
+  reopenClosedTab: () => { reopened: boolean; id: string | null; url?: string; windowId?: string }
   /** The window's tabs, its active tab, and whether the panel is collapsed. */
   listTabs: () => { tabs: TabInfo[]; activeId: string | null; panelCollapsed: boolean }
   /** Same, for ANY open window (ids from list-windows) rather than the one this

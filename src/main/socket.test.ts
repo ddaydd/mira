@@ -250,6 +250,8 @@ function setup(): {
     showAudioMenu: () => {},
     showMediaCaptureMenu: () => {},
     resetMediaCapture: () => {},
+    reopenClosedWindow: () => ({ reopened: false }),
+    listClosedWindows: () => [],
     listTabFolders: () => ({ folders: [] }),
     createTabFolder: () => ({ id: 'folder-1' }),
     renameTabFolder: () => ({ renamed: true }),

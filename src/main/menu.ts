@@ -98,6 +98,9 @@ export interface AppMenuHandlers {
   /** Reopen the most recently closed tab (Cmd+Shift+T) in the focused window.
    * Wired to the reopen-closed-tab command; a no-op when nothing was closed. */
   reopenTab: () => void
+  /** Reopen the most recently closed window with its tabs. Wired to the
+   * reopen-closed-window command; a no-op when none was closed. */
+  reopenWindow?: () => void
   /** Discard the active tab's page (Cmd+Alt+S): free its RAM, keep the tab, and move
    * to the next tab. Wired to the discard-active-tab command. */
   discardTab: () => void
@@ -270,6 +273,9 @@ export function appMenuTemplate(handlers: AppMenuHandlers): MenuItemConstructorO
         accelerator: 'CmdOrCtrl+Shift+T',
         click: () => handlers.reopenTab()
       },
+      ...(handlers.reopenWindow
+        ? [{ label: 'Reopen Closed Window', click: () => handlers.reopenWindow?.() }]
+        : []),
       // Cmd+Alt+S discards the active tab's page to reclaim RAM but keeps the tab
       // (asleep) and moves to the nearest already-loaded tab (never waking a
       // sleeping one) — not the browser's "Save Page As".

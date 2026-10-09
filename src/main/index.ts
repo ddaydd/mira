@@ -653,6 +653,7 @@ app.whenReady().then(async () => {
       clearSiteData: () =>
         runDetached('clear-site-data', { reload: true }, profiles.contextForFocused()),
       reopenTab: () => runDetached('reopen-closed-tab', {}, profiles.contextForFocused()),
+      reopenWindow: () => runDetached('reopen-closed-window', {}, profiles.contextForFocused()),
       discardTab: () => runDetached('discard-active-tab', {}, profiles.contextForFocused()),
       wakeAllTabs: () => runDetached('wake-all-tabs', {}, profiles.contextForFocused()),
       sleepAllTabs: () => runDetached('sleep-all-tabs', {}, profiles.contextForFocused()),
