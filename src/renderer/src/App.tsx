@@ -529,10 +529,13 @@ function App(): React.JSX.Element {
           <MediaCaptureButton capture={tabs.find((t) => t.id === activeId)?.mediaCapture} />
           {/* Page-zoom toggle: arms/disarms the Cmd+scroll optical magnifier.
             Off by default (the gesture fires too easily while scrolling with Cmd
-            held); optimistic flip, main persists via magnifier-set-enabled. */}
+            held); optimistic flip, main persists via magnifier-set-enabled.
+            Hidden off macOS: the gesture tests e.metaKey, which is Super on
+            Linux — taken by the desktop (KDE), so the loupe cannot fire there. */}
           <button
             type="button"
             className={`nav-button magnifier-button${magnifierEnabled ? ' active' : ''}`}
+            style={window.electron.process.platform === 'darwin' ? undefined : { display: 'none' }}
             title={
               magnifierEnabled ? 'Disable page zoom (⌘+scroll)' : 'Enable page zoom (⌘+scroll)'
             }
