@@ -385,6 +385,9 @@ function Sidebar({
   // tear-off from a drop it already committed. A ref, not state: dragEnd fires
   // right after drop and React may not have flushed the reset by then.
   const droppedInside = useRef(false)
+  // The loose list, for the drop zone under the New tab button (it resolves the
+  // pointer against these rows, see listDragOver).
+  const looseListRef = useRef<HTMLUListElement>(null)
 
   // Pinned tabs form a contiguous block at the head of the strip (a tab-store
   // invariant). The rest split into folders (grouped by folderId, in the folders'
@@ -499,10 +502,16 @@ function Sidebar({
   // dragOver on a list of rows (a folder's tabs, or the loose list): resolve the
   // pointer to the nearest row edge, so the gaps, the padding and the empty space
   // under the last row stop being dead zones. `catchAll` keeps the loose list a
-  // drop target even when it holds no row to aim at.
-  const listDragOver = (e: DragEvent<HTMLUListElement>, catchAll: boolean): void => {
+  // drop target even when it holds no row to aim at. `list` resolves against
+  // another element's rows (the space under the New tab button aims at the loose
+  // list's last row).
+  const listDragOver = (
+    e: DragEvent<HTMLElement>,
+    catchAll: boolean,
+    list?: HTMLElement | null
+  ): void => {
     if (!draggedRegularTab()) return
-    const target = nearestVerticalTarget(tabBoxesIn(e.currentTarget), e.clientY)
+    const target = nearestVerticalTarget(tabBoxesIn(list ?? e.currentTarget), e.clientY)
     if (!target && !catchAll) return
     e.preventDefault()
     // Inside a folder, keep the wrapper's "drop into this folder" from taking over
@@ -566,9 +575,6 @@ function Sidebar({
         commitDrop()
       }}
     >
-      <button type="button" className="sidebar-new" onClick={onNew} title="New tab (⌘T)">
-        <span className="sidebar-new-plus">+</span> New tab
-      </button>
       {pinnedTabs.length > 0 && (
         <ul
           className="pinned-grid"
@@ -683,10 +689,8 @@ function Sidebar({
       {folders.length > 0 && looseTabs.length > 0 && (
         <div className="tab-folders-divider" role="separator" />
       )}
-      {/* The loose list stretches to the bottom of the sidebar (see .tab-list in
-          main.css), so the empty space under the last tab is part of it: dropping
-          there sends the tab to the end of the list instead of doing nothing. */}
       <ul
+        ref={looseListRef}
         className="tab-list"
         onDragOver={(e) => listDragOver(e, true)}
         onDrop={(e) => {
@@ -697,6 +701,22 @@ function Sidebar({
       >
         {looseTabs.map(renderRow)}
       </ul>
+      {/* Chrome's vertical tabs: New tab right under the last tab, stuck to the
+          bottom of the panel once the list overflows (.sidebar-new is sticky). */}
+      <button type="button" className="sidebar-new" onClick={onNew} title="New tab (⌘T)">
+        <span className="sidebar-new-plus">+</span> New tab
+      </button>
+      {/* The empty space under the button still belongs to the loose list:
+          dropping there sends the tab to the end of the list. */}
+      <div
+        className="sidebar-tail"
+        onDragOver={(e) => listDragOver(e, true, looseListRef.current)}
+        onDrop={(e) => {
+          e.preventDefault()
+          e.stopPropagation()
+          commitLooseDrop()
+        }}
+      />
     </nav>
   )
 }
