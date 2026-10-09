@@ -41,6 +41,7 @@ effect and no process launched. It is the living source; what follows is only th
 ```bash
 mira tabs                              # tabs (id / ages / title / url); * = active, z = asleep, ♪ = sound
 mira tabs --window <id>                # ANOTHER window's strip (ids from `mira windows`)
+mira tabs --profile perso              # the user's window of that profile (label or id prefix)
 mira tabs --session                    # YOUR session window's strip (never opens one; --profile if several)
 mira windows                           # open windows (id / profile / tabs), * = focused
 mira close-window --params '{"windowId":"<id>"}'  # close ONE window (no id: the focused one)
@@ -271,7 +272,8 @@ launch yourself.
 
 An unknown or locked `profileId` returns `{ok:false}` — not a crash, a refusal to read. Same logic
 to target a specific window: `mira windows` gives the id, `mira tabs --window <id>` reads the right
-strip.
+strip, and `mira tabs --profile <p>` does both in one call. Raw socket, on a Mira built after
+2026-10-08: `list-tabs` takes `profileId` and refuses any other unknown key (a stray `"profile"` used to list the focused window).
 
 ## Capturing a page as an image
 

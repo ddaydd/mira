@@ -256,6 +256,25 @@ export function matchProfileId(profiles, flag) {
 }
 
 /**
+ * The window `mira tabs --profile <p>` lists: the profile's only open window.
+ * Several windows (a tear-off) are named so the caller picks one with --window;
+ * none means the profile is closed. Pure.
+ *
+ * @param {Array<{windowId:string,profileId:string}>} windows
+ * @param {string} profileId
+ * @param {string} [label]
+ * @returns {{ windowId: string } | { error: string }}
+ */
+export function profileWindow(windows, profileId, label) {
+  const name = label ? `${label} [${profileId}]` : profileId
+  const owned = (windows ?? []).filter((w) => w.profileId === profileId)
+  if (owned.length === 1) return { windowId: owned[0].windowId }
+  if (owned.length === 0) return { error: `profile not open: ${name}` }
+  const ids = owned.map((w) => `  ${w.windowId}`).join('\n')
+  return { error: `profile ${name} has ${owned.length} windows; pick one with --window:\n${ids}` }
+}
+
+/**
  * Find the single tab whose URL contains `needle`. Returns the match, or a
  * typed error so the caller can fail loudly on 0 or >1 (never guess).
  *

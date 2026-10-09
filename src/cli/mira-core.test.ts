@@ -27,7 +27,8 @@ import {
   background,
   resolveNavTarget,
   clientName,
-  withClient
+  withClient,
+  profileWindow
   // @ts-expect-error — plain-ESM sibling module, no .d.ts (the CLI ships without a build)
 } from './mira-core.mjs'
 
@@ -747,6 +748,30 @@ describe('withClient', () => {
     expect(withClient({ client: 'other', command: 'ping' }, 'me')).toEqual({
       client: 'other',
       command: 'ping'
+    })
+  })
+})
+
+describe('profileWindow', () => {
+  const windows = [
+    { windowId: 'w1', profileId: 'pro' },
+    { windowId: 'w2', profileId: 'perso' },
+    { windowId: 'w3', profileId: 'perso' }
+  ]
+
+  it("resolves a profile's only window", () => {
+    expect(profileWindow(windows, 'pro', 'pro: acme')).toEqual({ windowId: 'w1' })
+  })
+
+  it('refuses a closed profile, naming it', () => {
+    expect(profileWindow(windows, 'other', 'Jane Doe')).toEqual({
+      error: 'profile not open: Jane Doe [other]'
+    })
+  })
+
+  it('lists the windows of a profile that has several', () => {
+    expect(profileWindow(windows, 'perso')).toEqual({
+      error: 'profile perso has 2 windows; pick one with --window:\n  w2\n  w3'
     })
   })
 })
