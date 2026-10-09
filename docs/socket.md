@@ -367,6 +367,13 @@ Every file a page triggers is saved straight to `~/Downloads` (no OS save dialog
 | `toggle-skill-pane`                   | `open?`                     | show/hide the pane                                             |
 | `clear-chat` / `copy-chat`            | —                           | reset / copy the pane thread                                   |
 | `set-chat-options`                    | `model?`, `loadMcp?`        | per-chat LLM options                                           |
+| `list-chat-history`                   | —                           | the profile's past pane conversations, newest first: `{conversations:[{id, title, url, startedAt, updatedAt, turns, preview}]}` |
+| `get-chat-conversation`               | `id`                        | one conversation with its `messages`                           |
+| `open-chat-conversation`              | `id`                        | show it in the pane; further turns extend it → `{turns}`       |
+| `copy-chat-conversation`              | `id`                        | the whole thread to the clipboard                              |
+| `delete-chat-conversation` / `clear-chat-history` | `id` / —        | forget one / all → `{deleted}` / `{cleared}`                   |
+
+Every pane conversation is saved per profile (`profiles/<id>/chat-history.json`, last 200) when a turn settles; `clear-chat` starts a new one. Settings → AI chats lists them.
 
 ### Bookmarks
 

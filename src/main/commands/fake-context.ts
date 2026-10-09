@@ -1617,6 +1617,14 @@ export function makeContext(
     resetMediaCapture: () => {},
     reopenClosedWindow: () => ({ reopened: false }),
     listClosedWindows: () => [],
+    listChatHistory: () => [],
+    getChatConversation: (id: string) => {
+      throw new Error(`unknown conversation: ${id}`)
+    },
+    openChatConversation: () => ({ turns: 0 }),
+    copyChatConversation: () => {},
+    deleteChatConversation: () => false,
+    clearChatHistory: () => 0,
     // Tab folders: real in-memory mutations so the tab-folders command tests can
     // observe them (mirrors ProfileManager, minus the native re-layout).
     listTabFolders: () => ({ folders: state.folders }),

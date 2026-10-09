@@ -252,6 +252,14 @@ function setup(): {
     resetMediaCapture: () => {},
     reopenClosedWindow: () => ({ reopened: false }),
     listClosedWindows: () => [],
+    listChatHistory: () => [],
+    getChatConversation: (id: string) => {
+      throw new Error(`unknown conversation: ${id}`)
+    },
+    openChatConversation: () => ({ turns: 0 }),
+    copyChatConversation: () => {},
+    deleteChatConversation: () => false,
+    clearChatHistory: () => 0,
     listTabFolders: () => ({ folders: [] }),
     createTabFolder: () => ({ id: 'folder-1' }),
     renameTabFolder: () => ({ renamed: true }),

@@ -68,6 +68,8 @@ describe('skill pane commands', () => {
     expect(pane(ctx).open).toBe(true)
     expect(pane(ctx).messages).toEqual([])
     expect(pane(ctx).status).toBe('idle')
+    // The next question names the new conversation, not the cleared one's title.
+    expect(pane(ctx).title).toBe('')
   })
 
   it('copy-chat writes the latest assistant answer to the clipboard', async () => {

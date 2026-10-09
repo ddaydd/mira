@@ -102,7 +102,8 @@ export const paneCommands: CommandMap<CommandContext> = {
   'clear-chat': (ctx) => {
     try {
       const pane = ctx.getSkillPane()
-      ctx.showSkillPane({ ...pane, messages: [], status: 'idle', error: undefined })
+      // A cleared thread starts over: the next question names the new conversation.
+      ctx.showSkillPane({ ...pane, title: '', messages: [], status: 'idle', error: undefined })
       return { ok: true, cleared: true }
     } catch (error) {
       return fail(error)

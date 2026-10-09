@@ -276,6 +276,7 @@ import {
 } from './input-delivery'
 import { SessionWindowRegistry, firstUserWindow, sessionWindowProfile } from './session-windows'
 import { ClosedWindowStore, reopenWindowFirst, type ClosedWindow } from './closed-windows'
+import { ChatHistoryStore, conversationText, type ChatSummary } from './chat-history'
 import { inputReadiness, underlaysSurvive, viewShown } from './input-underlay'
 import { locationAuthStatus, requestLocationAuthorization } from './mac-location'
 import { extractionScript, type SkillSource } from './skills'
@@ -476,6 +477,10 @@ interface ProfileWindow {
    * the web view — layout() shrinks the view's WIDTH by skillPaneWidth while it is
    * open, so the pane sits beside the page (no piège #3). Closed by default. */
   skillPane: SkillPaneState
+  /** The pane thread's identity in the chat history (chat-history.ts): minted on
+   * its first message, dropped when the thread is cleared. `saved` = how many
+   * messages are already on disk, so a re-render does not rewrite the entry. */
+  chat?: { id: string; url: string; startedAt: number; saved: number }
   /** Remembered find-in-page text (Cmd+F): the query of the current search on
    * this window, so find-next / find-previous can step it without the chrome
    * resending the text. '' = no active search; cleared by stopFindInPage. */
@@ -3318,6 +3323,7 @@ export class ProfileManager {
   private setSkillPaneIn(pw: ProfileWindow, state: SkillPaneState): void {
     const opening = state.open && !pw.skillPane.open
     pw.skillPane = state
+    this.recordChat(pw, state)
     // Toggled during HTML fullscreen: the new state becomes the restore target
     // (the user's last word wins over the pre-fullscreen snapshot).
     if (pw.htmlFullScreen) {
@@ -3330,6 +3336,57 @@ export class ProfileManager {
       if (opening) pw.window.webContents.focus()
       pw.window.webContents.send('mira:skill-pane', state)
     }
+  }
+
+  /** Keep the pane thread in the profile's chat history: a new thread gets an id
+   * on its first message, each settled turn (idle) is saved, a cleared thread
+   * forgets its id so the next message starts a new conversation. */
+  private recordChat(pw: ProfileWindow, state: SkillPaneState): void {
+    if (state.messages.length === 0) {
+      pw.chat = undefined
+      return
+    }
+    if (!pw.chat) {
+      const active = pw.state.tabs.find((t) => t.id === pw.state.activeId)
+      pw.chat = { id: randomUUID(), url: active?.url ?? '', startedAt: Date.now(), saved: 0 }
+    }
+    if (state.status !== 'idle' || state.messages.length === pw.chat.saved) return
+    this.chatHistoryFor(pw.id).save({
+      id: pw.chat.id,
+      title: state.title,
+      url: pw.chat.url,
+      startedAt: pw.chat.startedAt,
+      updatedAt: Date.now(),
+      messages: state.messages
+    })
+    pw.chat.saved = state.messages.length
+  }
+
+  /** One profile's chat history store (profiles/<id>/chat-history.json). */
+  private readonly chatStores = new Map<string, ChatHistoryStore>()
+  private chatHistoryFor(profileId: string): ChatHistoryStore {
+    let store = this.chatStores.get(profileId)
+    if (!store) {
+      store = new ChatHistoryStore(
+        join(app.getPath('userData'), 'profiles', profileId, 'chat-history.json')
+      )
+      this.chatStores.set(profileId, store)
+    }
+    return store
+  }
+
+  /** Reopen a saved conversation in the window's pane; later turns extend it. */
+  private openChatConversationIn(pw: ProfileWindow, id: string): { turns: number } {
+    const conv = this.chatHistoryFor(pw.id).get(id)
+    if (!conv) throw new Error(`unknown conversation: ${id}`)
+    pw.chat = { id: conv.id, url: conv.url, startedAt: conv.startedAt, saved: conv.messages.length }
+    this.setSkillPaneIn(pw, {
+      open: true,
+      title: conv.title,
+      status: 'idle',
+      messages: conv.messages
+    })
+    return { turns: conv.messages.filter((m) => m.role === 'user').length }
   }
 
   /** Apply a panel-width change: relayout every open window (widths are app-wide)
@@ -3779,7 +3836,10 @@ export class ProfileManager {
       // Already back on screen (the profile's last window, reopened since from its
       // saved entry): a second copy would share its windowId.
       if (this.openById.has(entry.window.windowId)) continue
-      const pw = this.create(profile, { saved: { ...entry.window, open: true }, content: 'restore' })
+      const pw = this.create(profile, {
+        saved: { ...entry.window, open: true },
+        content: 'restore'
+      })
       this.saveSession(pw)
       this.deps.onChange?.()
       return {
@@ -7149,6 +7209,38 @@ export class ProfileManager {
       },
       resetMediaCapture: (tabId) => this.resetMediaCapture(tabId),
       reopenClosedWindow: (profileId) => this.reopenClosedWindow(profileId),
+      listChatHistory: (): ChatSummary[] => {
+        if (!target) throw new Error('no target window')
+        return this.chatHistoryFor(target.id).summaries()
+      },
+      getChatConversation: (id) => {
+        if (!target) throw new Error('no target window')
+        const conv = this.chatHistoryFor(target.id).get(id)
+        if (!conv) throw new Error(`unknown conversation: ${id}`)
+        return conv
+      },
+      openChatConversation: (id) => {
+        if (!target) throw new Error('no target window')
+        return this.openChatConversationIn(target, id)
+      },
+      copyChatConversation: (id) => {
+        if (!target) throw new Error('no target window')
+        const conv = this.chatHistoryFor(target.id).get(id)
+        if (!conv) throw new Error(`unknown conversation: ${id}`)
+        clipboard.writeText(conversationText(conv))
+      },
+      deleteChatConversation: (id) => {
+        if (!target) throw new Error('no target window')
+        const deleted = this.chatHistoryFor(target.id).delete(id)
+        // The pane still showing it: its next turn starts a new conversation.
+        for (const w of this.windowsForProfile(target.id)) if (w.chat?.id === id) w.chat = undefined
+        return deleted
+      },
+      clearChatHistory: () => {
+        if (!target) throw new Error('no target window')
+        for (const w of this.windowsForProfile(target.id)) w.chat = undefined
+        return this.chatHistoryFor(target.id).clear()
+      },
       listClosedWindows: () => this.listClosedWindows(),
       listTabFolders: () => ({ folders: target ? target.folders : [] }),
       createTabFolder: (title, tabId, edit) => {

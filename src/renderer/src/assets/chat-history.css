@@ -1,0 +1,78 @@
+/* Settings → AI chats (features/chat-history): one card per conversation,
+   unfolding into the thread. */
+.chat-history-list {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.chat-history-item {
+  border: 1px solid var(--ev-c-gray-3);
+  border-radius: 8px;
+  background: var(--color-background-soft);
+}
+
+.chat-history-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  background: transparent;
+  color: var(--color-text);
+  text-align: left;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.chat-history-title {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-history-meta,
+.chat-history-preview {
+  color: var(--ev-c-gray-1);
+  font-size: 11px;
+}
+
+.chat-history-preview {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-history-body {
+  padding: 0 10px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13px;
+  user-select: text;
+}
+
+.chat-history-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.chat-history-msg {
+  padding: 6px 10px;
+  border-radius: 8px;
+}
+
+.chat-history-msg.user {
+  align-self: flex-end;
+  max-width: 85%;
+  background: var(--color-background-mute);
+}
+
+.chat-history-msg p {
+  margin: 0;
+  white-space: pre-wrap;
+}

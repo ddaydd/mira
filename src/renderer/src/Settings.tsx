@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { AudioHistorySection } from './features/audio-history/AudioHistorySection'
+import { ChatHistorySection } from './features/chat-history/ChatHistorySection'
 
 // The Settings surface, rendered inline as a Mira tab (App shows it when the
 // active tab is the internal Settings tab). It never mutates state directly —
@@ -39,6 +40,7 @@ async function run(name: string, params?: unknown): Promise<Record<string, unkno
 type Section =
   | 'general'
   | 'ai'
+  | 'chats'
   | 'profiles'
   | 'tabs'
   | 'audio'
@@ -1323,6 +1325,7 @@ function TabsMemorySection(): React.JSX.Element {
 const SECTIONS: Array<{ key: Section; label: string }> = [
   { key: 'general', label: 'General' },
   { key: 'ai', label: 'AI' },
+  { key: 'chats', label: 'AI chats' },
   { key: 'profiles', label: 'Profiles' },
   { key: 'tabs', label: 'Tabs' },
   { key: 'audio', label: 'Audio' },
@@ -1362,6 +1365,7 @@ function Settings({ section: requested }: { section?: string }): React.JSX.Eleme
       </nav>
       {section === 'general' && <GeneralSection />}
       {section === 'ai' && <AiSection />}
+      {section === 'chats' && <ChatHistorySection />}
       {section === 'profiles' && <ProfilesSection />}
       {section === 'tabs' && <TabsMemorySection />}
       {section === 'audio' && <AudioHistorySection />}
