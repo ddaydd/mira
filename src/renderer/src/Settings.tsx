@@ -175,6 +175,7 @@ function GeneralSection(): React.JSX.Element {
   const [saved, setSaved] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [confirmQuit, setConfirmQuit] = useState(true)
+  const [devtoolsInWindow, setDevtoolsInWindow] = useState(false)
 
   useEffect(() => {
     const load = async (): Promise<void> => {
@@ -184,6 +185,7 @@ function GeneralSection(): React.JSX.Element {
       setHomeUrl(url)
       setSaved(url)
       setConfirmQuit(res.confirmQuit !== false)
+      setDevtoolsInWindow(res.devtoolsInWindow === true)
     }
     void load()
   }, [])
@@ -251,6 +253,20 @@ function GeneralSection(): React.JSX.Element {
       </label>
       <p className="settings-hint">
         Show &quot;Quit Mira?&quot; when you quit or close the last window.
+      </p>
+      <label className="settings-field settings-check">
+        <input
+          type="checkbox"
+          checked={devtoolsInWindow}
+          onChange={async (e) => {
+            const res = await run('set-devtools-in-window', { enabled: e.target.checked })
+            if (res.ok) setDevtoolsInWindow(res.devtoolsInWindow === true)
+          }}
+        />
+        <span>Open DevTools in a separate window</span>
+      </label>
+      <p className="settings-hint">
+        Inspect opens its own window instead of docking on the right of the page.
       </p>
     </div>
   )

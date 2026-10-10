@@ -55,7 +55,8 @@ describe('get-settings', () => {
       skillPaneWidth: 360,
       magnifierEnabled: false,
       bookmarksBarVisible: false,
-      confirmQuit: true
+      confirmQuit: true,
+      devtoolsInWindow: false
     })
   })
 })
@@ -108,7 +109,8 @@ describe('set-llm-config', () => {
       skillPaneWidth: 360,
       magnifierEnabled: false,
       bookmarksBarVisible: false,
-      confirmQuit: true
+      confirmQuit: true,
+      devtoolsInWindow: false
     })
   })
 
@@ -139,7 +141,8 @@ describe('set-home-url', () => {
       skillPaneWidth: 360,
       magnifierEnabled: false,
       bookmarksBarVisible: false,
-      confirmQuit: true
+      confirmQuit: true,
+      devtoolsInWindow: false
     })
   })
 
@@ -158,7 +161,8 @@ describe('set-home-url', () => {
       skillPaneWidth: 360,
       magnifierEnabled: false,
       bookmarksBarVisible: false,
-      confirmQuit: true
+      confirmQuit: true,
+      devtoolsInWindow: false
     })
   })
 
@@ -193,6 +197,36 @@ describe('set-confirm-quit', () => {
     const { ctx } = makeContext()
     const registry = createCommandRegistry()
     expect(registry.execute('set-confirm-quit', { enabled: 'no' }, ctx)).toEqual({
+      ok: false,
+      error: '"enabled" must be a boolean'
+    })
+  })
+})
+
+describe('set-devtools-in-window', () => {
+  it('moves DevTools to their own window and back, reflected in get-settings', () => {
+    const { ctx } = makeContext()
+    const registry = createCommandRegistry()
+    expect(
+      (registry.execute('get-settings', {}, ctx) as { devtoolsInWindow?: boolean }).devtoolsInWindow
+    ).toBe(false)
+    expect(registry.execute('set-devtools-in-window', { enabled: true }, ctx)).toEqual({
+      ok: true,
+      devtoolsInWindow: true
+    })
+    expect(
+      (registry.execute('get-settings', {}, ctx) as { devtoolsInWindow?: boolean }).devtoolsInWindow
+    ).toBe(true)
+    expect(registry.execute('set-devtools-in-window', { enabled: false }, ctx)).toEqual({
+      ok: true,
+      devtoolsInWindow: false
+    })
+  })
+
+  it('rejects a non-boolean', () => {
+    const { ctx } = makeContext()
+    const registry = createCommandRegistry()
+    expect(registry.execute('set-devtools-in-window', { enabled: 1 }, ctx)).toEqual({
       ok: false,
       error: '"enabled" must be a boolean'
     })

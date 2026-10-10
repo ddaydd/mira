@@ -80,7 +80,8 @@ function setup(): {
       skillPaneWidth: 360,
       magnifierEnabled: false,
       bookmarksBarVisible: false,
-      confirmQuit: true
+      confirmQuit: true,
+      devtoolsInWindow: false
     }),
     setLlmConfig: (llm) => ({
       homeUrl: 'home',
@@ -89,7 +90,8 @@ function setup(): {
       skillPaneWidth: 360,
       magnifierEnabled: false,
       bookmarksBarVisible: false,
-      confirmQuit: true
+      confirmQuit: true,
+      devtoolsInWindow: false
     }),
     setSidebarWidth: (width) => ({
       homeUrl: 'home',
@@ -98,7 +100,8 @@ function setup(): {
       skillPaneWidth: 360,
       magnifierEnabled: false,
       bookmarksBarVisible: false,
-      confirmQuit: true
+      confirmQuit: true,
+      devtoolsInWindow: false
     }),
     setSkillPaneWidth: (width) => ({
       homeUrl: 'home',
@@ -107,7 +110,8 @@ function setup(): {
       skillPaneWidth: width,
       magnifierEnabled: false,
       bookmarksBarVisible: false,
-      confirmQuit: true
+      confirmQuit: true,
+      devtoolsInWindow: false
     }),
     setConfirmQuit: (enabled: boolean) => ({
       homeUrl: 'home',
@@ -116,7 +120,18 @@ function setup(): {
       skillPaneWidth: 360,
       magnifierEnabled: false,
       bookmarksBarVisible: false,
-      confirmQuit: enabled
+      confirmQuit: enabled,
+      devtoolsInWindow: false
+    }),
+    setDevtoolsInWindow: (enabled: boolean) => ({
+      homeUrl: 'home',
+      llm: { provider: 'claude-cli' },
+      sidebarWidth: 240,
+      skillPaneWidth: 360,
+      magnifierEnabled: false,
+      bookmarksBarVisible: false,
+      confirmQuit: true,
+      devtoolsInWindow: enabled
     }),
     setHomeUrl: (url: string) => ({
       homeUrl: url,
@@ -125,7 +140,8 @@ function setup(): {
       skillPaneWidth: 360,
       magnifierEnabled: false,
       bookmarksBarVisible: false,
-      confirmQuit: true
+      confirmQuit: true,
+      devtoolsInWindow: false
     }),
     diskUsage: () => ({ root: '/fake', total: 0, reclaimable: 0, entries: [], profiles: [] }),
     cookieJarForProfile: () => ({ set: () => Promise.resolve() }),

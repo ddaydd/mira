@@ -11,6 +11,7 @@ import {
   withSkillPaneWidth,
   withMagnifierEnabled,
   withConfirmQuit,
+  withDevtoolsInWindow,
   SIDEBAR_WIDTH,
   SKILL_PANE_WIDTH,
   DEFAULT_HOME_URL
@@ -55,7 +56,8 @@ describe('normalizeSettings', () => {
       skillPaneWidth: SKILL_PANE_WIDTH.max,
       magnifierEnabled: false,
       bookmarksBarVisible: false,
-      confirmQuit: true
+      confirmQuit: true,
+      devtoolsInWindow: false
     })
   })
 
@@ -188,6 +190,24 @@ describe('confirmQuit', () => {
     const off = withConfirmQuit(defaultSettings(), false)
     expect(off).toEqual({ ...defaultSettings(), confirmQuit: false })
     expect(withConfirmQuit(off, true)).toEqual(defaultSettings())
+  })
+})
+
+describe('devtoolsInWindow', () => {
+  it('docks by default, including for a legacy file without the key', () => {
+    expect(defaultSettings().devtoolsInWindow).toBe(false)
+    expect(normalizeSettings({ homeUrl: 'https://x.test' }).devtoolsInWindow).toBe(false)
+    expect(normalizeSettings({ devtoolsInWindow: 'yes' }).devtoolsInWindow).toBe(false)
+  })
+
+  it('opens in a window only on an explicit true', () => {
+    expect(normalizeSettings({ devtoolsInWindow: true }).devtoolsInWindow).toBe(true)
+  })
+
+  it('withDevtoolsInWindow toggles it, preserving the rest', () => {
+    const on = withDevtoolsInWindow(defaultSettings(), true)
+    expect(on).toEqual({ ...defaultSettings(), devtoolsInWindow: true })
+    expect(withDevtoolsInWindow(on, false)).toEqual(defaultSettings())
   })
 })
 

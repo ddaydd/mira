@@ -29,6 +29,8 @@ export interface SettingsContext {
   setSkillPaneWidth: (width: number) => AppSettings
   /** Turn the "Quit Mira?" confirmation on / off. Persisted. */
   setConfirmQuit: (enabled: boolean) => AppSettings
+  /** Open DevTools in their own window (true) or docked on the right. Persisted. */
+  setDevtoolsInWindow: (enabled: boolean) => AppSettings
 }
 
 export interface SetHomeUrlParams {
@@ -127,6 +129,18 @@ export const settingsCommands: CommandMap<CommandContext> = {
     if (typeof enabled !== 'boolean') return { ok: false, error: '"enabled" must be a boolean' }
     try {
       return { ok: true, confirmQuit: ctx.setConfirmQuit(enabled).confirmQuit }
+    } catch (error) {
+      return fail(error)
+    }
+  },
+
+  // Where DevTools open: their own OS window (true) or docked on the right of
+  // the page (false, the default). Applies to the next opening.
+  'set-devtools-in-window': (ctx, params) => {
+    const { enabled } = (params ?? {}) as { enabled?: unknown }
+    if (typeof enabled !== 'boolean') return { ok: false, error: '"enabled" must be a boolean' }
+    try {
+      return { ok: true, devtoolsInWindow: ctx.setDevtoolsInWindow(enabled).devtoolsInWindow }
     } catch (error) {
       return fail(error)
     }

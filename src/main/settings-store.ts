@@ -28,6 +28,9 @@ export interface AppSettings {
   /** Whether quitting Mira asks "Quit Mira?" first (quit.ts). On by default; the
    * dialog's "Don't ask again" box turns it off, Settings → General back on. */
   confirmQuit: boolean
+  /** Whether DevTools open in their own OS window instead of docked on the right
+   * of the page. Off by default (docked, Mira's original layout). */
+  devtoolsInWindow: boolean
 }
 
 /** Allowed range + default for each resizable panel width. Main clamps to these
@@ -69,7 +72,8 @@ export function defaultSettings(): AppSettings {
     skillPaneWidth: SKILL_PANE_WIDTH.default,
     magnifierEnabled: false,
     bookmarksBarVisible: false,
-    confirmQuit: true
+    confirmQuit: true,
+    devtoolsInWindow: false
   }
 }
 
@@ -107,7 +111,8 @@ export function normalizeSettings(raw: unknown): AppSettings {
     magnifierEnabled: v.magnifierEnabled === true,
     bookmarksBarVisible: v.bookmarksBarVisible === true,
     // Only an explicit false silences the prompt: asking is the safe default.
-    confirmQuit: v.confirmQuit !== false
+    confirmQuit: v.confirmQuit !== false,
+    devtoolsInWindow: v.devtoolsInWindow === true
   }
 }
 
@@ -145,4 +150,9 @@ export function withBookmarksBarVisible(settings: AppSettings, visible: boolean)
 /** Return settings with the quit confirmation turned on or off. */
 export function withConfirmQuit(settings: AppSettings, enabled: boolean): AppSettings {
   return { ...settings, confirmQuit: enabled }
+}
+
+/** Return settings with DevTools opening in a separate window (or docked). */
+export function withDevtoolsInWindow(settings: AppSettings, enabled: boolean): AppSettings {
+  return { ...settings, devtoolsInWindow: enabled }
 }

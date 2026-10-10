@@ -498,6 +498,7 @@ A field is keyed by its `name` (else its `id`, else its `aria-label`), a site by
 | `set-llm-config`                             | `provider`, `apiKey?`, `model?` | AI engine (`claude-cli`, `anthropic-api`, `extractive`)                                  |
 | `set-sidebar-width` / `set-skill-pane-width` | `width`                         | panel widths (px, clamped)                                                               |
 | `set-confirm-quit`                           | `enabled`                       | ask "Quit Mira?" before quitting (on by default)                                         |
+| `set-devtools-in-window`                     | `enabled`                       | DevTools in their own window instead of docked right (off by default)                    |
 
 ### Cookies & data
 

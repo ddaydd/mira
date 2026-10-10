@@ -410,6 +410,7 @@ export function makeContext(
     sidebarWidth: 240,
     skillPaneWidth: 360,
     confirmQuit: true,
+    devtoolsInWindow: false,
     skillPane: { open: false, title: '', status: 'idle', messages: [] } as SkillPaneState,
     settingsTabId: null as string | null,
     // Tab armed by a first Cmd+W on a pinned tab (see closeActiveDecision);
@@ -544,6 +545,7 @@ export function makeContext(
     magnifierEnabled: boolean
     bookmarksBarVisible: boolean
     confirmQuit: boolean
+    devtoolsInWindow: boolean
   } => ({
     homeUrl: state.homeUrl,
     llm: state.llm,
@@ -551,7 +553,8 @@ export function makeContext(
     skillPaneWidth: state.skillPaneWidth,
     magnifierEnabled: magnifierEnabled.value,
     bookmarksBarVisible: bookmarksBar.visible,
-    confirmQuit: state.confirmQuit
+    confirmQuit: state.confirmQuit,
+    devtoolsInWindow: state.devtoolsInWindow
   })
   // Vault (encrypted-profile) state: which fake profiles are encrypted, and which
   // are unlocked this "session". The real ones shell out to hdiutil + fs.
@@ -861,6 +864,10 @@ export function makeContext(
     },
     setConfirmQuit: (enabled: boolean) => {
       state.confirmQuit = enabled
+      return appSettings()
+    },
+    setDevtoolsInWindow: (enabled: boolean) => {
+      state.devtoolsInWindow = enabled
       return appSettings()
     },
     showSkillPane: (paneState: SkillPaneState) => {

@@ -295,7 +295,8 @@ import {
   withSkillPaneWidth,
   withMagnifierEnabled,
   withBookmarksBarVisible,
-  withConfirmQuit
+  withConfirmQuit,
+  withDevtoolsInWindow
 } from './settings-store'
 
 /** Sentinel URL of the internal Settings tab (like chrome://settings). It never
@@ -559,6 +560,8 @@ export interface ProfileManagerDeps {
   bookmarksBarVisible: boolean
   /** Persisted "ask before quitting" (settings-store.ts). */
   confirmQuit: boolean
+  /** Persisted "open DevTools in a separate window" (settings-store.ts). */
+  devtoolsInWindow: boolean
   preloadPath: string
   icon?: string
   /** The app's userData directory. Vault paths (the per-profile encrypted image and
@@ -833,7 +836,8 @@ export class ProfileManager {
       skillPaneWidth: deps.skillPaneWidth,
       magnifierEnabled: deps.magnifierEnabled,
       bookmarksBarVisible: deps.bookmarksBarVisible,
-      confirmQuit: deps.confirmQuit
+      confirmQuit: deps.confirmQuit,
+      devtoolsInWindow: deps.devtoolsInWindow
     }
     this.startActivationTrace()
     this.checker()
@@ -4837,6 +4841,11 @@ export class ProfileManager {
       this.layout(pw)
       return false
     }
+    // An inspector in its own window (devtoolsInWindow) has no host view.
+    if (view.webContents.isDevToolsOpened()) {
+      view.webContents.closeDevTools()
+      return false
+    }
     this.openActiveDevTools(pw, id, view)
     return true
   }
@@ -4848,9 +4857,17 @@ export class ProfileManager {
     pw: ProfileWindow,
     id: string,
     view: WebContentsView
-  ): { host: WebContentsView; created: boolean } {
+  ): { host: WebContents | null; created: boolean } {
     const existing = pw.devtools.get(id)
-    if (existing) return { host: existing, created: false }
+    if (existing) return { host: existing.webContents, created: false }
+    if (this.appSettings.devtoolsInWindow) {
+      // A real OS window: Chromium's own detached DevTools, no host view and
+      // nothing for layout() to place. The frontend exists once it is opened.
+      const wc = view.webContents
+      if (wc.isDevToolsOpened()) return { host: wc.devToolsWebContents, created: false }
+      wc.openDevTools({ mode: 'detach' })
+      return { host: wc.devToolsWebContents, created: true }
+    }
     // The DevTools frontend is Mira's own chrome (devtools://), not profile
     // content, so the host view needs no session partition.
     const host = new WebContentsView()
@@ -4859,7 +4876,7 @@ export class ProfileManager {
     view.webContents.setDevToolsWebContents(host.webContents)
     view.webContents.openDevTools({ mode: 'detach' })
     this.layout(pw)
-    return { host, created: true }
+    return { host: host.webContents, created: true }
   }
 
   /** Open the active tab's docked DevTools (if needed) and reveal the Cookies
@@ -4873,16 +4890,27 @@ export class ProfileManager {
     if (!id || id === pw.settingsTabId) throw new Error('no active web page')
     const view = pw.views.get(id)
     if (!view) throw new Error('no active tab')
-    const { host, created } = this.openActiveDevTools(pw, id, view)
+    const wc = view.webContents
+    // A DevTools WINDOW (devtoolsInWindow) creates its frontend asynchronously:
+    // wait for devtools-opened (capped, never hang) before touching it.
+    const opened =
+      this.appSettings.devtoolsInWindow && !wc.isDevToolsOpened()
+        ? new Promise<void>((resolve) => {
+            wc.once('devtools-opened', () => resolve())
+            setTimeout(resolve, 5000)
+          })
+        : null
+    const { created } = this.openActiveDevTools(pw, id, view)
+    if (opened) await opened
+    const host = pw.devtools.get(id)?.webContents ?? wc.devToolsWebContents
+    if (!host) return true
     // A freshly opened host hasn't committed its devtools:// document yet; wait
     // for the load so executeJavaScript runs in the frontend, not about:blank.
-    if (created && host.webContents.isLoadingMainFrame()) {
-      await new Promise<void>((resolve) =>
-        host.webContents.once('did-finish-load', () => resolve())
-      )
+    if (created && host.isLoadingMainFrame()) {
+      await new Promise<void>((resolve) => host.once('did-finish-load', () => resolve()))
     }
     try {
-      await host.webContents.executeJavaScript(REVEAL_COOKIES_SCRIPT)
+      await host.executeJavaScript(REVEAL_COOKIES_SCRIPT)
     } catch {
       // Frontend internals moved; leaving DevTools open is still useful.
     }
@@ -5830,6 +5858,14 @@ export class ProfileManager {
     return { ...this.appSettings }
   }
 
+  /** Open DevTools in their own window (true) or docked on the right. Takes
+   * effect on the next opening; an inspector already open stays where it is. */
+  setDevtoolsInWindow(enabled: boolean): AppSettings {
+    this.appSettings = withDevtoolsInWindow(this.appSettings, enabled)
+    this.deps.persistSettings(this.appSettings)
+    return { ...this.appSettings }
+  }
+
   listBookmarksTree(): BookmarkTree {
     // openById is keyed by windowId now, so fall back to a window's PROFILE id.
     const id = this.focusedId() ?? this.openById.values().next().value?.id
@@ -6491,6 +6527,7 @@ export class ProfileManager {
         return { ...this.appSettings }
       },
       setConfirmQuit: (enabled) => this.setConfirmQuit(enabled),
+      setDevtoolsInWindow: (enabled) => this.setDevtoolsInWindow(enabled),
       startTracing: (params) => this.tracingSession.start(parseTraceParams(params)),
       stopTracing: () => this.tracingSession.stop(new Date()),
       tracingActive: () => this.tracingSession.isActive(),

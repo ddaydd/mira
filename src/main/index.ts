@@ -490,6 +490,7 @@ app.whenReady().then(async () => {
     magnifierEnabled: initialSettings.magnifierEnabled,
     bookmarksBarVisible: initialSettings.bookmarksBarVisible,
     confirmQuit: initialSettings.confirmQuit,
+    devtoolsInWindow: initialSettings.devtoolsInWindow,
     preloadPath,
     userDataDir: app.getPath('userData'),
     ...(process.platform === 'linux' ? { icon } : {}),
