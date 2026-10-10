@@ -86,6 +86,7 @@ import {
   numberedFilename,
   type DownloadState
 } from './downloads'
+import { transientTabIds } from './transient-tabs'
 import {
   PersistentDownloadTracker,
   markCompletedSeen,
@@ -2512,9 +2513,17 @@ export class ProfileManager {
     // The Settings tab is transient chrome (like chrome://settings), not restored
     // on relaunch — drop it from the snapshot. toPersisted recomputes activeIndex
     // on the filtered list (falls back to 0 when settings was the active tab).
-    const persistable: TabState = pw.settingsTabId
+    // Linux fork: a tab showing the download page is left out too (transient-tabs.ts).
+    const transient = transientTabIds(
+      pw.settingsTabId,
+      [...pw.views].map(([id, v]): [string, string] => [
+        id,
+        v.webContents.isDestroyed() ? '' : v.webContents.getURL()
+      ])
+    )
+    const persistable: TabState = transient.size
       ? {
-          tabs: pw.state.tabs.filter((t) => t.id !== pw.settingsTabId),
+          tabs: pw.state.tabs.filter((t) => !transient.has(t.id)),
           activeId: pw.state.activeId
         }
       : pw.state
