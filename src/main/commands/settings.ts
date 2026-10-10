@@ -27,6 +27,8 @@ export interface SettingsContext {
   setSidebarWidth: (width: number) => AppSettings
   /** Set the right skill pane width (px). Clamped, persisted, applied live. */
   setSkillPaneWidth: (width: number) => AppSettings
+  /** Turn the "Quit Mira?" confirmation on / off. Persisted. */
+  setConfirmQuit: (enabled: boolean) => AppSettings
 }
 
 export interface SetHomeUrlParams {
@@ -113,6 +115,18 @@ export const settingsCommands: CommandMap<CommandContext> = {
     try {
       const settings = ctx.setSkillPaneWidth(width)
       return { ok: true, skillPaneWidth: settings.skillPaneWidth }
+    } catch (error) {
+      return fail(error)
+    }
+  },
+
+  // Ask (or not) before quitting. The quit dialog's "Don't ask again" box sets
+  // it false; Settings → General turns it back on.
+  'set-confirm-quit': (ctx, params) => {
+    const { enabled } = (params ?? {}) as { enabled?: unknown }
+    if (typeof enabled !== 'boolean') return { ok: false, error: '"enabled" must be a boolean' }
+    try {
+      return { ok: true, confirmQuit: ctx.setConfirmQuit(enabled).confirmQuit }
     } catch (error) {
       return fail(error)
     }

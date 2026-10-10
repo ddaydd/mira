@@ -23,7 +23,8 @@ export const QUIT_CONFIRM = {
   message: 'Quit Mira?',
   detail: 'All windows and tabs close. They reopen at the next launch.',
   quitLabel: 'Quit',
-  cancelLabel: 'Cancel'
+  cancelLabel: 'Cancel',
+  dontAskLabel: "Don't ask again"
 } as const
 
 /** Shows the confirmation and resolves true when the user picked Quit. Must

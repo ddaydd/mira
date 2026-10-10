@@ -711,6 +711,12 @@ body {
   margin-bottom: 6px;
 }
 
+.settings-field.settings-check {
+  flex-direction: row;
+  align-items: center;
+  font-size: 13px;
+}
+
 .settings-field-label {
   font-size: 12px;
   color: var(--text-muted);

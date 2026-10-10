@@ -174,6 +174,7 @@ function GeneralSection(): React.JSX.Element {
   const [homeUrl, setHomeUrl] = useState('')
   const [saved, setSaved] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [confirmQuit, setConfirmQuit] = useState(true)
 
   useEffect(() => {
     const load = async (): Promise<void> => {
@@ -182,6 +183,7 @@ function GeneralSection(): React.JSX.Element {
       const url = String(res.homeUrl ?? '')
       setHomeUrl(url)
       setSaved(url)
+      setConfirmQuit(res.confirmQuit !== false)
     }
     void load()
   }, [])
@@ -236,6 +238,20 @@ function GeneralSection(): React.JSX.Element {
         The address a new tab and a fresh window open on. Leave empty to open a blank page.
       </p>
       {error && <p className="settings-error">{error}</p>}
+      <label className="settings-field settings-check">
+        <input
+          type="checkbox"
+          checked={confirmQuit}
+          onChange={async (e) => {
+            const res = await run('set-confirm-quit', { enabled: e.target.checked })
+            if (res.ok) setConfirmQuit(res.confirmQuit === true)
+          }}
+        />
+        <span>Ask before quitting</span>
+      </label>
+      <p className="settings-hint">
+        Show &quot;Quit Mira?&quot; when you quit or close the last window.
+      </p>
     </div>
   )
 }

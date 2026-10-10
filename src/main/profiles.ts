@@ -294,7 +294,8 @@ import {
   withSidebarWidth,
   withSkillPaneWidth,
   withMagnifierEnabled,
-  withBookmarksBarVisible
+  withBookmarksBarVisible,
+  withConfirmQuit
 } from './settings-store'
 
 /** Sentinel URL of the internal Settings tab (like chrome://settings). It never
@@ -556,6 +557,8 @@ export interface ProfileManagerDeps {
   magnifierEnabled: boolean
   /** Persisted bookmarks-bar visibility (app-wide). */
   bookmarksBarVisible: boolean
+  /** Persisted "ask before quitting" (settings-store.ts). */
+  confirmQuit: boolean
   preloadPath: string
   icon?: string
   /** The app's userData directory. Vault paths (the per-profile encrypted image and
@@ -829,7 +832,8 @@ export class ProfileManager {
       sidebarWidth: deps.sidebarWidth,
       skillPaneWidth: deps.skillPaneWidth,
       magnifierEnabled: deps.magnifierEnabled,
-      bookmarksBarVisible: deps.bookmarksBarVisible
+      bookmarksBarVisible: deps.bookmarksBarVisible,
+      confirmQuit: deps.confirmQuit
     }
     this.startActivationTrace()
     this.checker()
@@ -5814,6 +5818,18 @@ export class ProfileManager {
     return this.appSettings.bookmarksBarVisible
   }
 
+  /** Whether a user quit asks first (read by the quit prompt in index.ts). */
+  confirmQuit(): boolean {
+    return this.appSettings.confirmQuit
+  }
+
+  /** Turn the quit confirmation on / off (the dialog's checkbox, Settings). */
+  setConfirmQuit(enabled: boolean): AppSettings {
+    this.appSettings = withConfirmQuit(this.appSettings, enabled)
+    this.deps.persistSettings(this.appSettings)
+    return { ...this.appSettings }
+  }
+
   listBookmarksTree(): BookmarkTree {
     // openById is keyed by windowId now, so fall back to a window's PROFILE id.
     const id = this.focusedId() ?? this.openById.values().next().value?.id
@@ -6474,6 +6490,7 @@ export class ProfileManager {
         this.applyPanelWidths()
         return { ...this.appSettings }
       },
+      setConfirmQuit: (enabled) => this.setConfirmQuit(enabled),
       startTracing: (params) => this.tracingSession.start(parseTraceParams(params)),
       stopTracing: () => this.tracingSession.stop(new Date()),
       tracingActive: () => this.tracingSession.isActive(),

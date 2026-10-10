@@ -25,6 +25,9 @@ export interface AppSettings {
   /** Whether the bookmarks bar (a strip of top-level favorites under the
    * toolbar) is shown. Off by default: Mira's own model is the Bookmarks menu. */
   bookmarksBarVisible: boolean
+  /** Whether quitting Mira asks "Quit Mira?" first (quit.ts). On by default; the
+   * dialog's "Don't ask again" box turns it off, Settings → General back on. */
+  confirmQuit: boolean
 }
 
 /** Allowed range + default for each resizable panel width. Main clamps to these
@@ -65,7 +68,8 @@ export function defaultSettings(): AppSettings {
     sidebarWidth: SIDEBAR_WIDTH.default,
     skillPaneWidth: SKILL_PANE_WIDTH.default,
     magnifierEnabled: false,
-    bookmarksBarVisible: false
+    bookmarksBarVisible: false,
+    confirmQuit: true
   }
 }
 
@@ -101,7 +105,9 @@ export function normalizeSettings(raw: unknown): AppSettings {
     // Anything but an explicit true (including a legacy file without the key)
     // keeps the gesture off — off is the safe default.
     magnifierEnabled: v.magnifierEnabled === true,
-    bookmarksBarVisible: v.bookmarksBarVisible === true
+    bookmarksBarVisible: v.bookmarksBarVisible === true,
+    // Only an explicit false silences the prompt: asking is the safe default.
+    confirmQuit: v.confirmQuit !== false
   }
 }
 
@@ -134,4 +140,9 @@ export function withMagnifierEnabled(settings: AppSettings, enabled: boolean): A
 /** Return settings with the bookmarks bar shown or hidden. */
 export function withBookmarksBarVisible(settings: AppSettings, visible: boolean): AppSettings {
   return { ...settings, bookmarksBarVisible: visible }
+}
+
+/** Return settings with the quit confirmation turned on or off. */
+export function withConfirmQuit(settings: AppSettings, enabled: boolean): AppSettings {
+  return { ...settings, confirmQuit: enabled }
 }

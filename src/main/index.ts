@@ -84,9 +84,14 @@ app.on('open-url', (event, url) => {
 // quit.ts for the why and for the paths that skip the question). Installed at
 // module scope so the signal handler at the bottom of this file can suppress it;
 // nothing here touches Electron until a quit is actually requested.
+// The persisted "ask before quitting" bit, wired once the ProfileManager (which
+// holds the settings) exists; until then the gate asks, as before.
+let quitPromptSetting: { get: () => boolean; set: (enabled: boolean) => void } | null = null
 installQuitGate(
   createQuitGate({
     prompt: async () => {
+      // Turned off by the dialog's "Don't ask again" (Settings → General re-arms it).
+      if (quitPromptSetting && !quitPromptSetting.get()) return true
       // Sheet-attached to the window the user is looking at when there is one;
       // app-modal otherwise (quit with every window closed, on macOS).
       // A sheet (the update dialog) holds key status, so getFocusedWindow() is
@@ -105,12 +110,17 @@ installQuitGate(
         defaultId: 0,
         cancelId: 1,
         message: QUIT_CONFIRM.message,
-        detail: QUIT_CONFIRM.detail
+        detail: QUIT_CONFIRM.detail,
+        checkboxLabel: QUIT_CONFIRM.dontAskLabel,
+        checkboxChecked: false
       }
       try {
-        const { response } = parent
+        const { response, checkboxChecked } = parent
           ? await dialog.showMessageBox(parent, options)
           : await dialog.showMessageBox(options)
+        // "Don't ask again" only sticks on a confirmed quit: ticking it then
+        // cancelling must not silently arm the next Cmd+Q.
+        if (response === 0 && checkboxChecked) quitPromptSetting?.set(false)
         return response === 0
       } catch (error) {
         // A dialog we could not show must never turn into a silent quit.
@@ -479,6 +489,7 @@ app.whenReady().then(async () => {
     initialLlm: initialSettings.llm,
     magnifierEnabled: initialSettings.magnifierEnabled,
     bookmarksBarVisible: initialSettings.bookmarksBarVisible,
+    confirmQuit: initialSettings.confirmQuit,
     preloadPath,
     userDataDir: app.getPath('userData'),
     ...(process.platform === 'linux' ? { icon } : {}),
@@ -525,6 +536,10 @@ app.whenReady().then(async () => {
     // toolbar and the socket).
     runCommand: (wc, name, params) => runDetached(name, params, profiles.contextForChrome(wc))
   })
+  quitPromptSetting = {
+    get: () => profiles.confirmQuit(),
+    set: (enabled) => void profiles.setConfirmQuit(enabled)
+  }
 
   // Extension pages (browser-action popups, option pages) are created by the
   // electron-chrome-extensions lib as bare BrowserWindows with no window-open

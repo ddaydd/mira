@@ -54,7 +54,8 @@ describe('get-settings', () => {
       sidebarWidth: 240,
       skillPaneWidth: 360,
       magnifierEnabled: false,
-      bookmarksBarVisible: false
+      bookmarksBarVisible: false,
+      confirmQuit: true
     })
   })
 })
@@ -106,7 +107,8 @@ describe('set-llm-config', () => {
       sidebarWidth: 240,
       skillPaneWidth: 360,
       magnifierEnabled: false,
-      bookmarksBarVisible: false
+      bookmarksBarVisible: false,
+      confirmQuit: true
     })
   })
 
@@ -136,7 +138,8 @@ describe('set-home-url', () => {
       sidebarWidth: 240,
       skillPaneWidth: 360,
       magnifierEnabled: false,
-      bookmarksBarVisible: false
+      bookmarksBarVisible: false,
+      confirmQuit: true
     })
   })
 
@@ -154,7 +157,8 @@ describe('set-home-url', () => {
       sidebarWidth: 240,
       skillPaneWidth: 360,
       magnifierEnabled: false,
-      bookmarksBarVisible: false
+      bookmarksBarVisible: false,
+      confirmQuit: true
     })
   })
 
@@ -164,6 +168,33 @@ describe('set-home-url', () => {
     expect(registry.execute('set-home-url', {}, ctx)).toEqual({
       ok: false,
       error: '"url" must be a string'
+    })
+  })
+})
+
+describe('set-confirm-quit', () => {
+  it('turns the quit confirmation off and back on, reflected in get-settings', () => {
+    const { ctx } = makeContext()
+    const registry = createCommandRegistry()
+    expect(registry.execute('set-confirm-quit', { enabled: false }, ctx)).toEqual({
+      ok: true,
+      confirmQuit: false
+    })
+    expect(
+      (registry.execute('get-settings', {}, ctx) as { confirmQuit?: boolean }).confirmQuit
+    ).toBe(false)
+    expect(registry.execute('set-confirm-quit', { enabled: true }, ctx)).toEqual({
+      ok: true,
+      confirmQuit: true
+    })
+  })
+
+  it('rejects a non-boolean', () => {
+    const { ctx } = makeContext()
+    const registry = createCommandRegistry()
+    expect(registry.execute('set-confirm-quit', { enabled: 'no' }, ctx)).toEqual({
+      ok: false,
+      error: '"enabled" must be a boolean'
     })
   })
 })

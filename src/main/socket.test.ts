@@ -79,7 +79,8 @@ function setup(): {
       sidebarWidth: 240,
       skillPaneWidth: 360,
       magnifierEnabled: false,
-      bookmarksBarVisible: false
+      bookmarksBarVisible: false,
+      confirmQuit: true
     }),
     setLlmConfig: (llm) => ({
       homeUrl: 'home',
@@ -87,7 +88,8 @@ function setup(): {
       sidebarWidth: 240,
       skillPaneWidth: 360,
       magnifierEnabled: false,
-      bookmarksBarVisible: false
+      bookmarksBarVisible: false,
+      confirmQuit: true
     }),
     setSidebarWidth: (width) => ({
       homeUrl: 'home',
@@ -95,7 +97,8 @@ function setup(): {
       sidebarWidth: width,
       skillPaneWidth: 360,
       magnifierEnabled: false,
-      bookmarksBarVisible: false
+      bookmarksBarVisible: false,
+      confirmQuit: true
     }),
     setSkillPaneWidth: (width) => ({
       homeUrl: 'home',
@@ -103,7 +106,17 @@ function setup(): {
       sidebarWidth: 240,
       skillPaneWidth: width,
       magnifierEnabled: false,
-      bookmarksBarVisible: false
+      bookmarksBarVisible: false,
+      confirmQuit: true
+    }),
+    setConfirmQuit: (enabled: boolean) => ({
+      homeUrl: 'home',
+      llm: { provider: 'claude-cli' },
+      sidebarWidth: 240,
+      skillPaneWidth: 360,
+      magnifierEnabled: false,
+      bookmarksBarVisible: false,
+      confirmQuit: enabled
     }),
     setHomeUrl: (url: string) => ({
       homeUrl: url,
@@ -111,7 +124,8 @@ function setup(): {
       sidebarWidth: 240,
       skillPaneWidth: 360,
       magnifierEnabled: false,
-      bookmarksBarVisible: false
+      bookmarksBarVisible: false,
+      confirmQuit: true
     }),
     diskUsage: () => ({ root: '/fake', total: 0, reclaimable: 0, entries: [], profiles: [] }),
     cookieJarForProfile: () => ({ set: () => Promise.resolve() }),

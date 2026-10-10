@@ -409,6 +409,7 @@ export function makeContext(
     llm: { provider: 'claude-cli' } as LlmConfig,
     sidebarWidth: 240,
     skillPaneWidth: 360,
+    confirmQuit: true,
     skillPane: { open: false, title: '', status: 'idle', messages: [] } as SkillPaneState,
     settingsTabId: null as string | null,
     // Tab armed by a first Cmd+W on a pinned tab (see closeActiveDecision);
@@ -542,13 +543,15 @@ export function makeContext(
     skillPaneWidth: number
     magnifierEnabled: boolean
     bookmarksBarVisible: boolean
+    confirmQuit: boolean
   } => ({
     homeUrl: state.homeUrl,
     llm: state.llm,
     sidebarWidth: state.sidebarWidth,
     skillPaneWidth: state.skillPaneWidth,
     magnifierEnabled: magnifierEnabled.value,
-    bookmarksBarVisible: bookmarksBar.visible
+    bookmarksBarVisible: bookmarksBar.visible,
+    confirmQuit: state.confirmQuit
   })
   // Vault (encrypted-profile) state: which fake profiles are encrypted, and which
   // are unlocked this "session". The real ones shell out to hdiutil + fs.
@@ -854,6 +857,10 @@ export function makeContext(
     },
     setSkillPaneWidth: (width: number) => {
       state.skillPaneWidth = width
+      return appSettings()
+    },
+    setConfirmQuit: (enabled: boolean) => {
+      state.confirmQuit = enabled
       return appSettings()
     },
     showSkillPane: (paneState: SkillPaneState) => {

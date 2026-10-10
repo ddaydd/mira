@@ -10,6 +10,7 @@ import {
   withSidebarWidth,
   withSkillPaneWidth,
   withMagnifierEnabled,
+  withConfirmQuit,
   SIDEBAR_WIDTH,
   SKILL_PANE_WIDTH,
   DEFAULT_HOME_URL
@@ -53,7 +54,8 @@ describe('normalizeSettings', () => {
       sidebarWidth: 300,
       skillPaneWidth: SKILL_PANE_WIDTH.max,
       magnifierEnabled: false,
-      bookmarksBarVisible: false
+      bookmarksBarVisible: false,
+      confirmQuit: true
     })
   })
 
@@ -168,6 +170,24 @@ describe('withMagnifierEnabled', () => {
 
   it('is off by default', () => {
     expect(defaultSettings().magnifierEnabled).toBe(false)
+  })
+})
+
+describe('confirmQuit', () => {
+  it('asks by default, including for a legacy file without the key', () => {
+    expect(defaultSettings().confirmQuit).toBe(true)
+    expect(normalizeSettings({ homeUrl: 'https://x.test' }).confirmQuit).toBe(true)
+    expect(normalizeSettings({ confirmQuit: 'no' }).confirmQuit).toBe(true)
+  })
+
+  it('stays off only on an explicit false', () => {
+    expect(normalizeSettings({ confirmQuit: false }).confirmQuit).toBe(false)
+  })
+
+  it('withConfirmQuit toggles it, preserving the rest', () => {
+    const off = withConfirmQuit(defaultSettings(), false)
+    expect(off).toEqual({ ...defaultSettings(), confirmQuit: false })
+    expect(withConfirmQuit(off, true)).toEqual(defaultSettings())
   })
 })
 
