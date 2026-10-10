@@ -37,6 +37,7 @@ import { normalizeHistory, type HistoryEntry } from './history-store'
 import { normalizePermissions, type PermissionGrant } from './permission-store'
 import { normalizeSettings, type AppSettings } from './settings-store'
 import { buildAppMenu } from './menu'
+import { holdQuitForPageBeacons } from './quit-grace'
 import { installStealth } from './stealth'
 import { isExpectedExit, processGoneLine } from './frame-trace'
 import {
@@ -839,6 +840,8 @@ app.whenReady().then(async () => {
   // A published build installs a staged update once it has quit (the swap runs
   // in a detached script that waits for this process to exit). No-op otherwise.
   app.on('will-quit', () => applyStagedUpdateOnQuit())
+  // Linux fork: give the closing pages' beacons time to leave (quit-grace.ts).
+  if (process.platform !== 'darwin') holdQuitForPageBeacons(app)
 
   // Reopen exactly the profile windows that were open when Mira last quit (one
   // per open profile), or the default profile on a first launch / fresh install.

@@ -87,6 +87,7 @@ import {
   type DownloadState
 } from './downloads'
 import { transientTabIds } from './transient-tabs'
+import { closePageAsUser } from './quit-grace'
 import {
   PersistentDownloadTracker,
   markCompletedSeen,
@@ -1910,7 +1911,8 @@ export class ProfileManager {
       // after the window is gone, with no visible tab to stop it. Closing each
       // webContents (as closeTab does) releases the audio. Do it before 'closed',
       // which fires once the native window is already destroyed.
-      for (const view of profileWindow.views.values()) view.webContents.close()
+      // Linux fork: as a user would, so the pages' last requests leave (quit-grace.ts).
+      for (const view of profileWindow.views.values()) closePageAsUser(view.webContents)
       // Quit Mira when its LAST window closes (e.g. Cmd+Shift+W on the last
       // profile), rather than lingering window-less on macOS. This fires BEFORE
       // 'closed', so app.quit() → 'before-quit' → beginQuit() flips `quitting`
@@ -3774,7 +3776,7 @@ export class ProfileManager {
       this.logins.forgetTab(`${pw.id}:${id}`)
       this.deps.extensions.removeTab(view.webContents)
       pw.window.contentView.removeChildView(view)
-      view.webContents.close()
+      closePageAsUser(view.webContents)
     }
     // Closing the active tab hands focus to a neighbor, which may still be
     // unloaded — materialize it so the window shows a live page.
