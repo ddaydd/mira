@@ -38,6 +38,7 @@ import { magnifierCommands } from './magnifier'
 import { mediaCommands } from './media'
 import { mediaCaptureCommands } from './media-capture'
 import { closedWindowsCommands } from './closed-windows'
+import { saveImageCommands } from './save-image'
 import { chatHistoryCommands } from './chat-history'
 import { navigationCommands } from './navigation'
 import { openCommands } from './open'
@@ -180,6 +181,7 @@ export type { BookmarksBarContext } from './bookmarks-bar'
 export type { UiStateContext } from './ui-state'
 export type { MediaCaptureContext } from './media-capture'
 export type { ClosedWindowsContext } from './closed-windows'
+export type { SaveImageContext } from './save-image'
 export type { ChatHistoryContext } from './chat-history'
 export { estimateMenuWidth, rightAlignedX } from './app-menu'
 export type { TabsContext, TabInfo, TabKind } from './tabs'
@@ -271,6 +273,7 @@ export function createCommandRegistry(): CommandRegistry {
     ...uiStateCommands,
     ...mediaCaptureCommands,
     ...closedWindowsCommands,
+    ...saveImageCommands,
     ...chatHistoryCommands,
     ...tabTidyCommands,
     ...tabTopCommands,

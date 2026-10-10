@@ -285,6 +285,9 @@ function setup(): {
     resetMediaCapture: () => {},
     reopenClosedWindow: () => ({ reopened: false }),
     listClosedWindows: () => [],
+    saveImage: async () => ({ file: '' }),
+    saveImageAs: async () => ({ file: null }),
+    getImageSaveDir: () => '',
     listChatHistory: () => [],
     getChatConversation: (id: string) => {
       throw new Error(`unknown conversation: ${id}`)

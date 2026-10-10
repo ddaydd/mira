@@ -75,13 +75,20 @@ describe('buildPageMenu', () => {
     expect(items.filter((i) => i.type === 'separator')).toHaveLength(1)
   })
 
-  it('adds a direct "Download Image" command over an image', () => {
+  it('adds "Save Image" and "Save Image As…" over an image', () => {
     const items = buildPageMenu({ ...base, mediaType: 'image', srcURL: 'https://x.com/a.png' })
     expect(items).toContainEqual({
       type: 'command',
-      command: 'download-media',
+      command: 'save-image',
       params: { url: 'https://x.com/a.png' },
-      label: 'Download Image',
+      label: 'Save Image',
+      enabled: true
+    })
+    expect(items).toContainEqual({
+      type: 'command',
+      command: 'save-image-as',
+      params: { url: 'https://x.com/a.png' },
+      label: 'Save Image As…',
       enabled: true
     })
   })

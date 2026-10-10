@@ -52,6 +52,7 @@ import type { BookmarksBarContext } from './bookmarks-bar'
 import type { UiStateContext } from './ui-state'
 import type { MediaCaptureContext } from './media-capture'
 import type { ClosedWindowsContext } from './closed-windows'
+import type { SaveImageContext } from './save-image'
 import type { ChatHistoryContext } from './chat-history'
 import type { TabTidyContext } from './tab-tidy'
 import type { TabsContext } from './tabs'
@@ -108,6 +109,7 @@ export type CommandContext = AppContext &
   UiStateContext &
   MediaCaptureContext &
   ClosedWindowsContext &
+  SaveImageContext &
   ChatHistoryContext &
   TabTidyContext &
   TabTopContext &

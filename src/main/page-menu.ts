@@ -72,6 +72,13 @@ export function buildPageMenu(ctx: PageContext): PageMenuItem[] {
   if (ctx.mediaType === 'image' && ctx.srcURL) {
     items.push({
       type: 'command',
+      command: 'save-image-as',
+      params: { url: ctx.srcURL },
+      label: 'Save Image As…',
+      enabled: true
+    })
+    items.push({
+      type: 'command',
       command: 'new-tab',
       params: { url: ctx.srcURL },
       label: 'Open Image in New Tab',
@@ -148,11 +155,13 @@ export function needsImageProbe(mediaType: string): boolean {
  * item instead. Pure. */
 export function buildMediaItem(mediaType: string, srcURL: string): PageMenuItem | null {
   if (mediaType === 'image' && srcURL) {
+    // Into the profile's image folder (Downloads until a "Save Image As…" picks
+    // another one, see image-save-dir.ts).
     return {
       type: 'command',
-      command: 'download-media',
+      command: 'save-image',
       params: { url: srcURL },
-      label: 'Download Image',
+      label: 'Save Image',
       enabled: true
     }
   }

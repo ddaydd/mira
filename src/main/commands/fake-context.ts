@@ -361,6 +361,8 @@ export function makeContext(
   const magnifierFlashes: string[] = []
   // The Cmd+scroll gesture gate (app setting). Boxed so the ctx closures share it.
   const magnifierEnabled = { value: false }
+  // Folder "Save Image" writes into (save-image commands).
+  const imageSaveDir = { value: '/fake/images' }
   const bookmarksBar = { visible: false }
   // Folders whose name field was requested (create-tab-folder with edit: true).
   const folderEdits: string[] = []
@@ -1647,6 +1649,17 @@ export function makeContext(
     resetMediaCapture: () => {},
     reopenClosedWindow: () => ({ reopened: false }),
     listClosedWindows: () => [],
+    // Save image: files land in a fake per-profile folder; "As…" picks
+    // /fake/picked (remembered) unless the url asks for a cancelled dialog.
+    saveImage: async (url: string) => ({
+      file: `${imageSaveDir.value}/${url.split('/').pop()}`
+    }),
+    saveImageAs: async (url: string) => {
+      if (url.includes('cancel')) return { file: null }
+      imageSaveDir.value = '/fake/picked'
+      return { file: `${imageSaveDir.value}/${url.split('/').pop()}` }
+    },
+    getImageSaveDir: () => imageSaveDir.value,
     listChatHistory: () => [],
     getChatConversation: (id: string) => {
       throw new Error(`unknown conversation: ${id}`)

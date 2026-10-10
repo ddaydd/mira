@@ -20,7 +20,7 @@ import {
 import { existsSync, readFileSync, rmSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { appendFile, mkdir, writeFile } from 'node:fs/promises'
-import { dirname, extname, join } from 'node:path'
+import { basename, dirname, extname, join } from 'node:path'
 import {
   app,
   BrowserWindow,
@@ -282,6 +282,7 @@ import {
 } from './input-delivery'
 import { SessionWindowRegistry, firstUserWindow, sessionWindowProfile } from './session-windows'
 import { ClosedWindowStore, reopenWindowFirst, type ClosedWindow } from './closed-windows'
+import { ImageSaveDirStore } from './image-save-dir'
 import { ChatHistoryStore, conversationText, type ChatSummary } from './chat-history'
 import { inputReadiness, underlaysSurvive, viewShown } from './input-underlay'
 import { locationAuthStatus, requestLocationAuthorization } from './mac-location'
@@ -758,6 +759,13 @@ export class ProfileManager {
   private get closedWindows(): ClosedWindowStore {
     return (this.closedWindowStore ??= new ClosedWindowStore(
       join(app.getPath('userData'), 'closed-windows.json')
+    ))
+  }
+  /** Per-profile "Save Image" folder (image-save-dir.ts). Lazy, like closedWindows. */
+  private imageSaveDirStore: ImageSaveDirStore | null = null
+  private get imageSaveDirs(): ImageSaveDirStore {
+    return (this.imageSaveDirStore ??= new ImageSaveDirStore(
+      join(app.getPath('userData'), 'image-save-dirs.json')
     ))
   }
   private sessionReaper: ReturnType<typeof setInterval> | null = null
@@ -4747,7 +4755,20 @@ export class ProfileManager {
     url: string,
     dir: string,
     used: Set<string>
-  ): Promise<void> {
+  ): Promise<string> {
+    const { bytes, mime } = await this.fetchMediaUrl(wc, url)
+    const name = uniqueFileName(fileNameFor(url, mime), dir, used)
+    used.add(name)
+    await writeFile(join(dir, name), bytes)
+    return join(dir, name)
+  }
+
+  /** The bytes + mime type behind a media URL: decoded from a data: URL, fetched
+   * inside the page for a blob: URL, or with the tab's session (its cookies). */
+  private async fetchMediaUrl(
+    wc: WebContents,
+    url: string
+  ): Promise<{ bytes: Buffer; mime: string }> {
     let bytes: Buffer
     let mime = ''
     if (url.startsWith('data:')) {
@@ -4785,9 +4806,7 @@ export class ProfileManager {
       mime = res.headers.get('content-type')?.split(';')[0]?.trim() ?? ''
       bytes = Buffer.from(await res.arrayBuffer())
     }
-    const name = uniqueFileName(fileNameFor(url, mime), dir, used)
-    used.add(name)
-    await writeFile(join(dir, name), bytes)
+    return { bytes, mime }
   }
 
   /** Download a streamed video (MSE/HLS/blob — e.g. X) as a real file via yt-dlp.
@@ -6786,6 +6805,32 @@ export class ProfileManager {
           }
         }
         return { saved, failed }
+      },
+      saveImage: async (url, tabId) => {
+        if (!target) throw new Error('no target window')
+        const { wc } = this.resolveMediaTab(target, tabId)
+        const dir = this.imageSaveDirs.dirFor(target.id, app.getPath('downloads'))
+        const file = await this.saveMediaUrl(wc, url, dir, new Set())
+        if (!target.window.isDestroyed()) void showToast(target, `Saved ${basename(file)}`)
+        return { file }
+      },
+      saveImageAs: async (url, tabId) => {
+        if (!target) throw new Error('no target window')
+        const { wc } = this.resolveMediaTab(target, tabId)
+        // Fetch first: the dialog proposes a name with the real extension.
+        const { bytes, mime } = await this.fetchMediaUrl(wc, url)
+        const dir = this.imageSaveDirs.dirFor(target.id, app.getPath('downloads'))
+        const { canceled, filePath } = await dialog.showSaveDialog(target.window, {
+          defaultPath: join(dir, fileNameFor(url, mime))
+        })
+        if (canceled || !filePath) return { file: null }
+        await writeFile(filePath, bytes)
+        this.imageSaveDirs.remember(target.id, dirname(filePath))
+        return { file: filePath }
+      },
+      getImageSaveDir: () => {
+        if (!target) throw new Error('no target window')
+        return this.imageSaveDirs.dirFor(target.id, app.getPath('downloads'))
       },
       downloadVideoUrl: async (url) => {
         // yt-dlp runs as its own process on the permalink — no tab needed. (The
