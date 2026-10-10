@@ -355,6 +355,11 @@ Every file a page triggers is saved straight to `~/Downloads` (no OS save dialog
 | `reveal-download`    | `id`   | reveal the file in the OS file manager; error when unknown or the file is gone                                                                                                                                                  |
 | `clear-downloads`    | —      | drop the finished downloads from the list (running ones stay); result `{cleared}`                                                                                                                                               |
 | `get-download-stats` | —      | in-flight summary for the status bar: `{active, since, receivedBytes, totalBytes}` (`since` = epoch ms of the earliest running download, or null)                                                                               |
+| `remove-download`    | `id`   | (Linux fork) drop one finished download from the list, the file stays on disk; error `no finished download: <id>` for a running/unknown one                                                                                     |
+| `mark-downloads-seen` | —     | (Linux fork) acknowledge every completed download (clears the status-bar badge); result `{marked}`                                                                                                                              |
+| `open-downloads-folder` | —   | (Linux fork) open `~/Downloads` in the OS file manager                                                                                                                                                                          |
+
+Linux fork: the list is kept across restarts in `<userData>/downloads.json` (last 200; a download still running at quit comes back `interrupted`), `list-downloads` flags a completed record whose file is gone with `missing: true`, and `open-settings {section: "downloads"}` (Ctrl+Shift+J, ☰ → File → Downloads, or a click on the status-bar indicator) shows it as a page.
 
 ### Skills & AI pane
 

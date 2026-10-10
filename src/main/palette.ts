@@ -161,6 +161,13 @@ const STATIC_COMMANDS: ReadonlyArray<Omit<PaletteEntry, 'group'>> = [
     keywords: 'preferences config options',
     shortcut: '⌘,'
   },
+  {
+    id: 'cmd:downloads',
+    title: 'Downloads',
+    command: 'open-settings',
+    params: { section: 'downloads' },
+    keywords: 'files downloaded history'
+  },
   { id: 'cmd:new-profile', title: 'New Profile', command: 'create-profile', keywords: 'account' },
   {
     id: 'cmd:clear-site-data',

@@ -82,11 +82,15 @@ import { MEDIA_COLLECT_SOURCE, nearestVideoPermalinkSource, parseDomMedia } from
 import { audioAnalysisSource, type AudioAnalysis } from './audio-analysis'
 import { ytdlpDownload } from './ytdlp'
 import {
-  DownloadTracker,
   completionMessage,
   numberedFilename,
   type DownloadState
 } from './downloads'
+import {
+  PersistentDownloadTracker,
+  markCompletedSeen,
+  removeFinishedDownload
+} from './download-history'
 import { homePageUrl, isMiraHomeUrl, type HomeStats } from './home-doc'
 import { errorPageUrl, isMiraErrorUrl, isRetryUrl } from './error-doc'
 import {
@@ -762,7 +766,10 @@ export class ProfileManager {
    * DownloadItem handles (needed to cancel) are kept alongside, keyed by the same
    * minted id. Sessions we have already hooked with will-download are recorded so
    * the hook installs once per partition. */
-  private readonly downloadTracker = new DownloadTracker()
+  // Linux fork: the list survives restarts (Settings → Downloads).
+  private readonly downloadTracker = new PersistentDownloadTracker(
+    join(app.getPath('userData'), 'downloads.json')
+  )
   private readonly downloadItems = new Map<string, DownloadItem>()
   private readonly downloadSessions = new Set<string>()
   /** Source URL of the download page a tab currently shows (a navigation that
@@ -6055,6 +6062,14 @@ export class ProfileManager {
     }
   }
 
+  /** Linux fork: refresh every window's status bar and downloads page — the
+   * downloads list is app-wide, not per profile. */
+  private broadcastDownloadsChanged(): void {
+    for (const pw of this.openById.values()) {
+      if (!pw.window.isDestroyed()) pw.window.webContents.send('mira:downloads-changed')
+    }
+  }
+
   /** The window currently hosting `tabId` (its tab is in that window's strip), or
    * null. Resolved LIVE against the strips so a tab's own event handlers (wired
    * once in materializeTab) follow it across a detach/attach without re-wiring —
@@ -6731,8 +6746,23 @@ export class ProfileManager {
       },
       openDownload: (id) => this.openDownloadById(id),
       revealDownload: (id) => this.revealDownloadById(id),
-      clearDownloads: () => this.downloadTracker.clearInactive(),
+      clearDownloads: () => {
+        const cleared = this.downloadTracker.clearInactive()
+        if (cleared) this.broadcastDownloadsChanged()
+        return cleared
+      },
       getDownloadStats: () => this.downloadTracker.stats(),
+      removeDownload: (id) => {
+        const removed = removeFinishedDownload(this.downloadTracker, id)
+        if (removed) this.broadcastDownloadsChanged()
+        return removed
+      },
+      markDownloadsSeen: () => {
+        const marked = markCompletedSeen(this.downloadTracker, Date.now())
+        if (marked) this.broadcastDownloadsChanged()
+        return marked
+      },
+      openDownloadsFolder: async () => (await shell.openPath(app.getPath('downloads'))) === '',
       openFindBar: () => {
         // Guard first: the find bar is useless without a page to search.
         activeWebContents()

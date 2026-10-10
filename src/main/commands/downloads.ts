@@ -29,6 +29,14 @@ export interface DownloadsContext {
   clearDownloads: () => number
   /** Status-bar summary of the in-flight downloads. */
   getDownloadStats: () => DownloadStats
+  /** Drop one finished download from the list (the file stays on disk). False for
+   * an unknown id or a running download. */
+  removeDownload: (id: string) => boolean
+  /** Acknowledge every completed download (clears the status-bar badge); returns
+   * how many were marked. */
+  markDownloadsSeen: () => number
+  /** Open the Downloads folder in the OS file manager. Resolves false on failure. */
+  openDownloadsFolder: () => Promise<boolean>
 }
 
 /** Pull a non-empty string `id` from a params object, or null. Pure. */
@@ -86,6 +94,37 @@ export const downloadsCommands: CommandMap<CommandContext> = {
   'clear-downloads': (ctx) => {
     try {
       return { ok: true, cleared: ctx.clearDownloads() }
+    } catch (error) {
+      return fail(error)
+    }
+  },
+
+  // Drop one finished download from the list (Settings → Downloads' × button).
+  'remove-download': (ctx, params) => {
+    const id = readDownloadId(params)
+    if (!id) return { ok: false, error: 'missing "id"' }
+    try {
+      if (!ctx.removeDownload(id)) return { ok: false, error: `no finished download: ${id}` }
+      return { ok: true }
+    } catch (error) {
+      return fail(error)
+    }
+  },
+
+  // Acknowledge every completed download: the downloads page calls it on open,
+  // which clears the status bar's "✓ n" badge.
+  'mark-downloads-seen': (ctx) => {
+    try {
+      return { ok: true, marked: ctx.markDownloadsSeen() }
+    } catch (error) {
+      return fail(error)
+    }
+  },
+
+  'open-downloads-folder': async (ctx) => {
+    try {
+      if (!(await ctx.openDownloadsFolder())) return { ok: false, error: 'cannot open the folder' }
+      return { ok: true }
     } catch (error) {
       return fail(error)
     }

@@ -12,7 +12,8 @@ export interface AppMenuHandlers {
   }
   openProfile: (id: string) => void
   newProfile: () => void
-  openSettings: () => void
+  /** Open Settings, optionally on a sub-section ('downloads', …). */
+  openSettings: (section?: string) => void
   /** Run an update check on demand (the App menu item). Unlike the daily check,
    * it answers even when Mira is up to date. */
   checkForUpdates: () => void
@@ -363,6 +364,12 @@ export function appMenuTemplate(handlers: AppMenuHandlers): MenuItemConstructorO
   if (!isMac && Array.isArray(fileMenu.submenu)) {
     fileMenu.submenu.push(
       { type: 'separator' },
+      // Chrome's Ctrl+J is taken by the AI panel here (toggleSkillPane).
+      {
+        label: 'Downloads',
+        accelerator: 'CmdOrCtrl+Shift+J',
+        click: () => handlers.openSettings('downloads')
+      },
       settingsItem,
       { label: 'Check for Updates…', click: () => handlers.checkForUpdates() },
       { type: 'separator' },

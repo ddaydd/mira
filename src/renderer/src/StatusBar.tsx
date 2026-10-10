@@ -100,6 +100,11 @@ const TOOLTIP_DELAY_MS = 150
  * native layer always paints on top of the DOM (CLAUDE.md, "les deux pièges").
  * So the bubble is a transparent overlay WINDOW drawn by main — reached, like
  * every action, through the command registry (show-tooltip / hide-tooltip). */
+/** Linux fork: the download indicator opens Settings → Downloads off macOS. */
+function downloadsClickHint(mac: string): string {
+  return window.electron.process.platform === 'darwin' ? mac : 'click to see all downloads'
+}
+
 export default function StatusBar(): React.JSX.Element {
   const [now, setNow] = useState(() => new Date())
   const [status, setStatus] = useState<Status>(EMPTY)
@@ -245,6 +250,11 @@ export default function StatusBar(): React.JSX.Element {
   // marks it seen main-side, which shrinks the badge. Resolves the id via
   // list-downloads so the bar holds no download state itself.
   const revealLatestDownload = async (): Promise<void> => {
+    // Linux fork: the indicator opens Settings → Downloads (the full list) instead.
+    if (window.electron.process.platform !== 'darwin') {
+      void window.mira.command('open-settings', { section: 'downloads' })
+      return
+    }
     const res = (await window.mira.command('list-downloads')) as {
       ok: boolean
       downloads?: Array<{ id: string; state: string; seen?: boolean }>
@@ -303,7 +313,7 @@ export default function StatusBar(): React.JSX.Element {
                 e.currentTarget,
                 `Downloading ${files} file${files > 1 ? 's' : ''} to Downloads${
                   filePercent != null ? ` — ${filePercent}%` : ''
-                }. Click to reveal the latest.`
+                }. ${downloadsClickHint('Click to reveal the latest.')}`
               )
             }
             onMouseLeave={hide}
@@ -321,7 +331,7 @@ export default function StatusBar(): React.JSX.Element {
             onMouseEnter={(e) =>
               show(
                 e.currentTarget,
-                `${filesDone} download${filesDone > 1 ? 's' : ''} finished — click to open the latest`
+                `${filesDone} download${filesDone > 1 ? 's' : ''} finished — ${downloadsClickHint('click to open the latest')}`
               )
             }
             onMouseLeave={hide}

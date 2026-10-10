@@ -115,6 +115,7 @@ import { registrableDomain } from '../domain'
 import { type PermissionGrant } from '../permission-store'
 import type { MagnifierState } from '../magnifier'
 import { DownloadTracker, type DownloadRecord } from '../downloads'
+import { markCompletedSeen, removeFinishedDownload } from '../download-history'
 import {
   normalizeThemes,
   createTheme as createThemePure,
@@ -280,6 +281,8 @@ export interface FakeContext {
   openedDownloads: string[]
   /** Ids passed to revealDownload that actually revealed (downloads spy). */
   revealedDownloads: string[]
+  /** How many times openDownloadsFolder ran (downloads spy). */
+  downloadsFolderOpens: () => number
   /** Session windows created through session-window, in order (with their pid). */
   sessionWindows: Array<{ sessionId: string; pid?: number }>
 }
@@ -350,6 +353,7 @@ export function makeContext(
   const cancelledDownloads: string[] = []
   const openedDownloads: string[] = []
   const revealedDownloads: string[] = []
+  let downloadsFolderOpens = 0
   let downloadClock = 0
   // Magnifier: per-view zoom/pan state, plus spies for the native effects.
   const magnifierStates = new Map<string, MagnifierState>()
@@ -1096,6 +1100,12 @@ export function makeContext(
     },
     clearDownloads: () => downloads.clearInactive(),
     getDownloadStats: () => downloads.stats(),
+    removeDownload: (id: string) => removeFinishedDownload(downloads, id),
+    markDownloadsSeen: () => markCompletedSeen(downloads, ++downloadClock),
+    openDownloadsFolder: async () => {
+      downloadsFolderOpens++
+      return true
+    },
     // Find slice: mirror the manager's guard (find needs an active WEB page),
     // record the calls, remember the text so findStep works without resending it.
     openFindBar: () => {
@@ -2338,6 +2348,7 @@ export function makeContext(
     cancelledDownloads,
     openedDownloads,
     revealedDownloads,
+    downloadsFolderOpens: () => downloadsFolderOpens,
     sessionWindows
   }
 }

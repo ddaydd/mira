@@ -150,6 +150,9 @@ function setup(): {
       totalBytes: 0,
       unseen: 0
     }),
+    removeDownload: () => false,
+    markDownloadsSeen: () => 0,
+    openDownloadsFolder: async () => false,
     // Tab slice: minimal stubs, not exercised by these socket-dispatch tests.
     newTab: (url?: string) => ({
       id: 'tab',

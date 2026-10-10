@@ -130,3 +130,17 @@ describe('the menu template', () => {
     expect(clashes).toEqual([])
   })
 })
+
+describe.skipIf(process.platform === 'darwin')('the Downloads item (off macOS)', () => {
+  it('opens Settings → Downloads on Ctrl+Shift+J', () => {
+    const handlers = makeHandlers()
+    const item = find(appMenuTemplate(handlers), 'Downloads')
+    expect(item?.accelerator).toBe('CmdOrCtrl+Shift+J')
+    item?.click?.(
+      {} as Parameters<NonNullable<MenuItemConstructorOptions['click']>>[0],
+      undefined,
+      {} as KeyboardEvent
+    )
+    expect(handlers.openSettings).toHaveBeenCalledWith('downloads')
+  })
+})

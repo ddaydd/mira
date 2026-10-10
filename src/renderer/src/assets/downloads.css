@@ -1,0 +1,98 @@
+/* Settings → Downloads (features/downloads): one row per file. */
+.downloads-list {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.downloads-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--ev-c-gray-3);
+  border-radius: 8px;
+  background: var(--color-background-soft);
+  font-size: 13px;
+}
+
+.downloads-main {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+  min-width: 0;
+}
+
+.downloads-name {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+button.downloads-name {
+  cursor: pointer;
+}
+
+button.downloads-name:hover {
+  text-decoration: underline;
+}
+
+.downloads-item.gone .downloads-name {
+  color: var(--ev-c-gray-1);
+  text-decoration: line-through;
+}
+
+.downloads-meta {
+  color: var(--ev-c-gray-1);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.downloads-bar {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--ev-c-gray-3);
+  overflow: hidden;
+}
+
+.downloads-bar-fill {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.3s;
+}
+
+.downloads-bar-fill.indeterminate {
+  animation: downloads-slide 1.2s ease-in-out infinite alternate;
+}
+
+@keyframes downloads-slide {
+  from {
+    margin-left: 0;
+  }
+  to {
+    margin-left: 70%;
+  }
+}
+
+.downloads-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.downloads-remove {
+  font-size: 15px;
+  line-height: 1;
+}
