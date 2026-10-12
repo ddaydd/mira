@@ -715,7 +715,8 @@ app.whenReady().then(async () => {
     () => profiles.contextForFocused(),
     undefined,
     focusFeed,
-    (record) => {
+    ({ params, response, ...record }) => {
+      profiles.noteAgentCommand(record.command, params, response)
       const entry = { ...record, at: Date.now() }
       lastCommand.record(entry)
       appendFile(commandLogPath, `${formatCommandEntry(entry)}\n`).catch(() => {})

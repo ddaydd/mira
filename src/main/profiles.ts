@@ -208,6 +208,7 @@ import {
   MediaCaptureTracker,
   type MediaCaptureInfo
 } from './media-capture-state'
+import { AgentActivity, tabsTouchedBy } from './agent-activity'
 import { buildFolderMenu, type FolderMenuItem } from './folder-menu'
 import {
   addFolder as addFolderPure,
@@ -753,6 +754,10 @@ export class ProfileManager {
    * which CLAUDE_CODE_SESSION_ID, and the timer that closes the window of a
    * session whose process has exited. */
   private readonly sessionWindowRegistry = new SessionWindowRegistry()
+  /** Tabs an agent is working in (agent-activity.ts): the robot icon on the row,
+   * and the timer that clears it once the agent goes quiet. */
+  private readonly agentActivity = new AgentActivity()
+  private agentActivityTimer: NodeJS.Timeout | null = null
   /** Recently closed user windows, persisted (closed-windows.ts). Lazy: userData
    * is only known once the app is ready. */
   private closedWindowStore: ClosedWindowStore | null = null
@@ -3512,8 +3517,51 @@ export class ProfileManager {
       loading: this.liveContents(pw, t.id)?.isLoadingMainFrame() === true,
       waking: this.wakingTabs.has(t.id),
       // Camera/mic in use or blocked on this page (address-bar camera button).
-      mediaCapture: this.mediaCaptureOf(pw, t.id)
+      mediaCapture: this.mediaCaptureOf(pw, t.id),
+      // An agent sent a command to this tab in the last few seconds.
+      agentActive: this.agentActivity.isActive(t.id, Date.now())
     }))
+  }
+
+  /** A socket request finished: flag the tabs it touched (robot icon on the row)
+   * and re-push their windows, now and when the flag expires. Called for every
+   * socket request, so it must never throw. */
+  noteAgentCommand(command: string | null, params: unknown, response: unknown): void {
+    try {
+      const focused =
+        this.findByWindow(BrowserWindow.getFocusedWindow()) ??
+        this.openById.values().next().value ??
+        null
+      const fallback = focused && !focused.window.isDestroyed() ? focused.state.activeId : null
+      const now = Date.now()
+      for (const tabId of tabsTouchedBy(command, params, response, fallback)) {
+        const pw = this.ownerOf(tabId)
+        if (!pw) continue
+        const wasActive = this.agentActivity.isActive(tabId, now)
+        this.agentActivity.touch(tabId, now)
+        if (!wasActive) this.schedulePush(pw)
+      }
+      this.armAgentActivityTimer()
+    } catch {
+      // A display hint must never break the socket reply loop.
+    }
+  }
+
+  /** Re-push the windows whose agent flag expired, then re-arm for the next. */
+  private armAgentActivityTimer(): void {
+    if (this.agentActivityTimer) clearTimeout(this.agentActivityTimer)
+    this.agentActivityTimer = null
+    const wait = this.agentActivity.nextExpiryIn(Date.now())
+    if (wait === null) return
+    this.agentActivityTimer = setTimeout(() => {
+      this.agentActivityTimer = null
+      for (const tabId of this.agentActivity.expire(Date.now())) {
+        const pw = this.ownerOf(tabId)
+        if (pw) this.schedulePush(pw)
+      }
+      this.armAgentActivityTimer()
+    }, wait + 50)
+    this.agentActivityTimer.unref()
   }
 
   /** A tab's camera/mic state, or null (asleep, or nothing to show). */

@@ -579,6 +579,37 @@ body {
   height: 10px;
 }
 
+/* Agent at work (AgentIcon): same slot and colors as the speaker, with a slow
+   pulse so it reads as "in progress". On a pinned square: top-right badge (the
+   speaker takes the bottom-right one). */
+.tab-agent {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  color: var(--accent, var(--ev-c-text-2));
+  animation: tab-agent-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes tab-agent-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+.pinned-tab .tab-agent {
+  position: absolute;
+  right: 0;
+  top: 0;
+  padding: 1px;
+  border-radius: 5px;
+  background: var(--color-background);
+}
+
+.pinned-tab .tab-agent svg {
+  width: 10px;
+  height: 10px;
+}
+
 /* The toolbar audio button carries the same SVG; center it like the other
    nav-button glyphs (which are text). */
 .audio-button svg {

@@ -125,6 +125,10 @@ export interface SocketCommandRecord {
   command: string | null
   ok: boolean
   error?: string
+  /** The request's params and the reply as sent (agent-activity.ts reads them;
+   * the command log must not keep them: a screenshot reply is megabytes). */
+  params?: unknown
+  response?: SocketResponse
 }
 
 /** Handle on the running control socket. `server` always resolves to the LIVE
@@ -201,7 +205,8 @@ export function startCommandSocket(
           const { client, command } = requestIdentity(trimmed)
           const error = response.ok ? undefined : (response as { error?: string }).error
           try {
-            onCommand({ client, command, ok: response.ok, error })
+            const params = (JSON.parse(trimmed) as { params?: unknown } | null)?.params
+            onCommand({ client, command, ok: response.ok, error, params, response })
           } catch {
             // Logging must never break the reply loop.
           }

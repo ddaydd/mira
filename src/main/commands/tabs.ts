@@ -47,6 +47,9 @@ export interface TabInfo {
    * null/absent when there is nothing to show. Live runtime state, see
    * media-capture-state.ts. */
   mediaCapture?: MediaCaptureInfo | null
+  /** An agent (socket client: Claude through the mira CLI) sent a command to
+   * this tab in the last few seconds (agent-activity.ts): robot icon on the row. */
+  agentActive?: boolean
   /** When the tab was opened, epoch ms, or null when unknown (a tab restored
    * from a session file written before tabs carried timestamps). Persisted, so it
    * survives restarts: a tab opened three weeks ago reports three weeks. */

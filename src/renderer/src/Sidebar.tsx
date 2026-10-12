@@ -40,6 +40,34 @@ export interface TabInfo {
   waking?: boolean
   /** Camera/mic in use or blocked on this page (address-bar camera button). */
   mediaCapture?: PreloadTabInfo['mediaCapture']
+  /** An agent (Claude through the mira CLI) is working in this tab. */
+  agentActive?: boolean
+}
+
+/** The robot shown while an agent works in the tab (agent-activity.ts in main):
+ * Chrome moves such a tab into a group, Mira only marks it. Same monochrome
+ * glyph style as AudioIcon. */
+function AgentIcon(): React.JSX.Element {
+  return (
+    <span className="tab-agent" aria-label="Agent at work" title="An agent is working in this tab">
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+        <path d="M8 1.6v2.2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+        <circle cx="8" cy="1.6" r="1" fill="currentColor" />
+        <rect
+          x="2.6"
+          y="4.4"
+          width="10.8"
+          height="8.6"
+          rx="2.4"
+          stroke="currentColor"
+          strokeWidth="1.3"
+        />
+        <circle cx="6" cy="8.4" r="1.1" fill="currentColor" />
+        <circle cx="10" cy="8.4" r="1.1" fill="currentColor" />
+        <path d="M6.4 11h3.2" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+      </svg>
+    </span>
+  )
 }
 
 /** The speaker icon shown on a tab that is emitting sound. A monochrome inline
@@ -215,6 +243,7 @@ function PinnedSquare({
       onDragEnd={onDragEnd}
     >
       <Favicon tab={tab} />
+      {tab.agentActive && <AgentIcon />}
       {tab.audible && <AudioIcon />}
     </li>
   )
@@ -302,6 +331,7 @@ export function TabRow({
       <span className="tab-title">
         {isSettings ? 'Settings' : tab.title || tab.url || 'New tab'}
       </span>
+      {tab.agentActive && <AgentIcon />}
       {tab.audible && <AudioIcon />}
       {/* Close button: last in the row and always taking its slot (CSS hides it
           with opacity, never with display), so every row's × sits at the same x

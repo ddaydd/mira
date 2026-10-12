@@ -29,6 +29,8 @@ export interface TabInfo {
     cameraLabels: string[]
     microphoneLabels: string[]
   } | null
+  /** An agent is working in this tab (robot icon on the row). */
+  agentActive?: boolean
 }
 
 /** A tab folder (metadata): the sidebar groups tabs by folderId; this carries the
