@@ -18,6 +18,7 @@ import {
   type MediaPickRequest
 } from './media-device-picker'
 import { GUM_SHIM_PRELOAD_SOURCE } from './media-device-picker-shim'
+import { DeviceMemoryStore } from './media-device-memory'
 import {
   MEDIA_CAPTURE_REPORT_CHANNEL,
   MEDIA_FORCE_PICK_CHANNEL,
@@ -64,11 +65,19 @@ export class MediaDevicePickerService {
    * mirroring ExtensionCaptureService.pickerOpen. */
   private pickerOpen = false
   private readonly attached = new WeakSet<Session>()
+  /** Linux fork: the devices each site was given, so the picker does not come
+   * back on every request (media-device-memory.ts). */
+  private readonly memory: DeviceMemoryStore
+  /** Pages whose force flag the shim already consumed (pinned-device path): their
+   * next pick bypasses the memory, like a fresh "Choose devices again". */
+  private readonly forced = new WeakSet<WebContents>()
 
   constructor(
     private readonly userDataDir: string,
     private readonly hooks: MediaCaptureHooks = {}
-  ) {}
+  ) {
+    this.memory = new DeviceMemoryStore(join(userDataDir, 'media-device-choices.json'))
+  }
 
   /** Install the ipc handler (once) and register the shim preload on `ses`
    * (once per session). Call for each web-page session. */
@@ -87,13 +96,19 @@ export class MediaDevicePickerService {
     if (this.ipcInstalled) return
     this.ipcInstalled = true
     ipcMain.handle(MEDIA_PICK_IPC_CHANNEL, async (event, payload) => {
-      const choice = await this.pick(payload)
-      if (!choice) this.hooks.onDenied?.(event.sender)
+      const wc = event.sender
+      // "Choose devices again": armed on the camera button, consumed either here
+      // or earlier by the shim's pinned-device path (this.forced).
+      const forced = this.forced.delete(wc) || !!this.hooks.consumeForcePick?.(wc)
+      const choice = await this.pick(payload, event.senderFrame?.origin, forced)
+      if (!choice) this.hooks.onDenied?.(wc)
       return choice
     })
-    ipcMain.handle(MEDIA_FORCE_PICK_CHANNEL, (event) =>
-      this.hooks.consumeForcePick ? this.hooks.consumeForcePick(event.sender) : false
-    )
+    ipcMain.handle(MEDIA_FORCE_PICK_CHANNEL, (event) => {
+      const force = this.hooks.consumeForcePick ? this.hooks.consumeForcePick(event.sender) : false
+      if (force) this.forced.add(event.sender)
+      return force
+    })
     ipcMain.on(MEDIA_CAPTURE_REPORT_CHANNEL, (event: IpcMainEvent, payload) => {
       const frame = event.senderFrame
       const frameKey = frame ? `${frame.processId}:${frame.routingId}` : 'main'
@@ -103,9 +118,20 @@ export class MediaDevicePickerService {
 
   /** Show the picker for one getUserMedia request and resolve the choice, or null
    * to cancel (a picker already up, or nothing to pick). */
-  private async pick(payload: unknown): Promise<MediaPickChoice | null> {
-    if (this.pickerOpen) return null
+  private async pick(
+    payload: unknown,
+    frameOrigin?: string,
+    forced = false
+  ): Promise<MediaPickChoice | null> {
     const request = normalizePickRequest(payload)
+    // The origin comes from the frame, not from the page's own claim: a page
+    // must not read another site's remembered devices.
+    if (frameOrigin !== undefined) request.origin = frameOrigin === 'null' ? '' : frameOrigin
+    if (!forced) {
+      const remembered = this.memory.lookup(request)
+      if (remembered) return remembered
+    }
+    if (this.pickerOpen) return null
     const hasVideo = request.wantVideo && request.videoDevices.length > 0
     const hasAudio = request.wantAudio && request.audioDevices.length > 0
     // Nothing to choose from — let the real getUserMedia proceed with defaults
@@ -114,10 +140,12 @@ export class MediaDevicePickerService {
     if (!hasVideo && !hasAudio) return { video: null, audio: null }
     this.pickerOpen = true
     try {
-      return await showMediaDevicePicker(request, {
+      const choice = await showMediaDevicePicker(request, {
         parent: BrowserWindow.getFocusedWindow(),
         preloadPath: this.ensurePickerPreload()
       })
+      if (choice) this.memory.remember(request.origin, choice)
+      return choice
     } finally {
       this.pickerOpen = false
     }
