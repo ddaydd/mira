@@ -707,9 +707,15 @@ function Sidebar({
         <span className="sidebar-new-plus">+</span> New tab
       </button>
       {/* The empty space under the button still belongs to the loose list:
-          dropping there sends the tab to the end of the list. */}
+          dropping there sends the tab to the end of the list. Off macOS it also
+          moves the window, like the empty tab strip in Chrome. */}
       <div
         className="sidebar-tail"
+        style={
+          window.electron.process.platform === 'darwin'
+            ? undefined
+            : ({ WebkitAppRegion: 'drag' } as React.CSSProperties)
+        }
         onDragOver={(e) => listDragOver(e, true, looseListRef.current)}
         onDrop={(e) => {
           e.preventDefault()
