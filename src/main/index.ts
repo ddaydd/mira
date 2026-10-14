@@ -545,11 +545,21 @@ app.whenReady().then(async () => {
   // Linux: a window of a profile that has its own launcher (`--profile <id>`)
   // joins that launcher in the dock instead of the plain Mira one.
   if (process.platform === 'linux') {
+    // Deferred: a restored maximized window is shown by maximize() inside
+    // create(), before the manager has registered it under its profile.
     app.on('browser-window-created', (_, window) => {
-      window.once('show', () => {
-        const profileId = profiles.profileIdOfWindow(window)
-        if (profileId) bindWindowToProfileLauncher(window, profileId)
-      })
+      let bound = false
+      const bind = (): void => {
+        setTimeout(() => {
+          if (bound || window.isDestroyed()) return
+          const profileId = profiles.profileIdOfWindow(window)
+          if (!profileId) return
+          bound = true
+          bindWindowToProfileLauncher(window, profileId)
+        }, 0)
+      }
+      window.once('show', bind)
+      window.once('ready-to-show', bind)
     })
   }
 
