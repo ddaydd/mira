@@ -102,3 +102,59 @@ describe('show-bookmark-menu / edit-bookmark', () => {
     })
   })
 })
+
+describe('add-bookmark-to-bar', () => {
+  const top = (ctx: ReturnType<typeof makeContext>['ctx']): string[] =>
+    ctx.listBookmarks().tree.map((n) => (n.kind === 'url' ? n.url : n.title))
+
+  it('inserts a new page at the dropped index, the end by default', () => {
+    const { ctx } = makeContext()
+    const registry = createCommandRegistry()
+    registry.execute('add-bookmark-to-bar', { url: 'https://a/' }, ctx)
+    registry.execute('add-bookmark-to-bar', { url: 'https://b/' }, ctx)
+    const res = registry.execute(
+      'add-bookmark-to-bar',
+      { url: 'https://c/', title: 'C', index: 1 },
+      ctx
+    )
+    expect(res).toMatchObject({ ok: true, created: true, index: 1, node: { title: 'C' } })
+    expect(top(ctx)).toEqual(['https://a/', 'https://c/', 'https://b/'])
+  })
+
+  it('moves an existing favorite instead of duplicating it, both directions', () => {
+    const { ctx } = makeContext()
+    const registry = createCommandRegistry()
+    for (const url of ['https://a/', 'https://b/', 'https://c/']) {
+      registry.execute('add-bookmark-to-bar', { url }, ctx)
+    }
+    // a dropped in the gap before c (slot 2) lands between b and c
+    expect(
+      registry.execute('add-bookmark-to-bar', { url: 'https://a/', index: 2 }, ctx)
+    ).toMatchObject({ ok: true, created: false, index: 1 })
+    expect(top(ctx)).toEqual(['https://b/', 'https://a/', 'https://c/'])
+    registry.execute('add-bookmark-to-bar', { url: 'https://c/', index: 0 }, ctx)
+    expect(top(ctx)).toEqual(['https://c/', 'https://b/', 'https://a/'])
+  })
+
+  it('pulls a favorite out of its folder onto the bar', () => {
+    const { ctx } = makeContext()
+    const registry = createCommandRegistry()
+    const folder = ctx.addFolder('F').node
+    ctx.addBookmark('https://in/', 'In', folder.id)
+    registry.execute('add-bookmark-to-bar', { url: 'https://in/', index: 0 }, ctx)
+    expect(top(ctx)).toEqual(['https://in/', 'F'])
+  })
+
+  it('validates its params', () => {
+    const { ctx } = makeContext()
+    const registry = createCommandRegistry()
+    expect(registry.execute('add-bookmark-to-bar', {}, ctx)).toEqual({
+      ok: false,
+      error: 'missing "url"'
+    })
+    expect(registry.execute('add-bookmark-to-bar', { url: 'https://a/', index: -1 }, ctx)).toEqual({
+      ok: false,
+      error: '"index" must be a non-negative integer'
+    })
+  })
+})

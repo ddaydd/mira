@@ -8,6 +8,7 @@ import ResizeHandle from './ResizeHandle'
 import ExtensionActions from './features/extensions/ExtensionActions'
 import AppMenuButton from './features/app-menu/AppMenuButton'
 import BookmarksBar from './features/bookmarks-bar/BookmarksBar'
+import SiteDragHandle from './features/bookmarks-bar/SiteDragHandle'
 import WindowControls from './features/window-controls/WindowControls'
 import FindBar from './features/find/FindBar'
 import MediaGallery from './features/media/MediaGallery'
@@ -480,6 +481,12 @@ function App(): React.JSX.Element {
                 {activeTitleOf(tabs, activeId)}
               </span>
             )}
+            {/* Site icon: drag it onto the bookmarks bar (features/bookmarks-bar). */}
+            <SiteDragHandle
+              url={tabs.find((t) => t.id === activeId)?.url ?? ''}
+              title={activeTitleOf(tabs, activeId)}
+              favicon={tabs.find((t) => t.id === activeId)?.favicon ?? null}
+            />
             <input
               ref={addressInputRef}
               className="address-input"

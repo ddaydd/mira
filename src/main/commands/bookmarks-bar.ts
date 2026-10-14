@@ -86,6 +86,43 @@ export const bookmarksBarCommands: CommandMap<CommandContext> = {
     }
   },
 
+  // A page dropped on the bar (the address-bar site icon, a link, a bar item
+  // being reordered): bookmark it at top-level `index` (default: the end). An
+  // already-bookmarked url is not duplicated: that favorite moves there instead.
+  'add-bookmark-to-bar': (ctx, params) => {
+    const { url, title, index } = (params ?? {}) as {
+      url?: unknown
+      title?: unknown
+      index?: unknown
+    }
+    if (typeof url !== 'string' || url.trim() === '') return { ok: false, error: 'missing "url"' }
+    if (title !== undefined && typeof title !== 'string') {
+      return { ok: false, error: '"title" must be a string' }
+    }
+    if (
+      index !== undefined &&
+      (typeof index !== 'number' || !Number.isInteger(index) || index < 0)
+    ) {
+      return { ok: false, error: '"index" must be a non-negative integer' }
+    }
+    try {
+      const { node, created } = ctx.addBookmark(url.trim(), title)
+      const tree = ctx.listBookmarks().tree
+      const to = index === undefined ? tree.length : index
+      // Moving detaches first: a favorite already left of the slot shifts it by one.
+      const from = tree.findIndex((n) => n.id === node.id)
+      ctx.moveBookmark(node.id, null, from !== -1 && from < to ? to - 1 : to)
+      return {
+        ok: true,
+        created,
+        node,
+        index: ctx.listBookmarks().tree.findIndex((n) => n.id === node.id)
+      }
+    } catch (error) {
+      return fail(error)
+    }
+  },
+
   'show-bookmarks-menu': (ctx, params) => {
     const { folderId, fromIndex, x, y } = (params ?? {}) as ShowBookmarksMenuParams
     if (folderId !== undefined && (typeof folderId !== 'string' || folderId.trim() === '')) {

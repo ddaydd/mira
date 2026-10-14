@@ -6,17 +6,28 @@
 // does the » button with the items that did not fit. A right-click pops the
 // item's native menu (`show-bookmark-menu`); its Rename… comes back here as an
 // inline text field (`edit-bookmark` → onEditBookmark → rename-bookmark).
+// A page dropped on the strip (the address-bar site icon, a link, a url item
+// dragged to reorder) is bookmarked at that spot (`add-bookmark-to-bar`).
 
 import {
   useEffect,
   useLayoutEffect,
   useRef,
   useState,
+  type DragEvent,
   type MouseEvent,
   type ReactElement
 } from 'react'
 import type { BookmarkNode } from '../../../../preload/index.d'
 import { firstHiddenIndex } from './overflow'
+import { dropSlot, droppedPage, MIRA_PAGE_MIME, type DropSlot } from './drop'
+
+/** Whether a drag carries a page the bar can take (types only: the data itself
+ * is unreadable until the drop). */
+function carriesPage(e: DragEvent): boolean {
+  const types = e.dataTransfer.types
+  return types.includes(MIRA_PAGE_MIME) || types.includes('text/uri-list')
+}
 
 /** Mira does not store favicons for favorites: ask the site for its
  * /favicon.ico, and fall back to a one-letter badge when that fails. */
@@ -77,6 +88,7 @@ export default function BookmarksBar({ tree }: { tree: BookmarkNode[] }): ReactE
   const stripRef = useRef<HTMLDivElement>(null)
   const [hiddenFrom, setHiddenFrom] = useState<number | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [slot, setSlot] = useState<DropSlot | null>(null)
 
   useEffect(() => window.mira.onEditBookmark((id) => setEditingId(id)), [])
 
@@ -117,9 +129,51 @@ export default function BookmarksBar({ tree }: { tree: BookmarkNode[] }): ReactE
     window.mira.command('navigate', { url: node.url, ...(newTab ? { newTab: true } : {}) })
   }
 
+  // The slot under the pointer, among the items actually shown (not the ones
+  // the » menu took), in the strip's own coordinates.
+  const slotAt = (clientX: number): DropSlot | null => {
+    const strip = stripRef.current
+    if (!strip) return null
+    const shown = Array.from(strip.querySelectorAll<HTMLElement>('[data-bar-index]')).filter(
+      (el) => hiddenFrom === null || Number(el.dataset.barIndex) < hiddenFrom
+    )
+    const x = clientX - strip.getBoundingClientRect().left
+    return dropSlot(
+      shown.map((el) => ({ left: el.offsetLeft, right: el.offsetLeft + el.offsetWidth })),
+      x
+    )
+  }
+
+  const onDragOver = (e: DragEvent<HTMLDivElement>): void => {
+    if (!carriesPage(e)) return
+    e.preventDefault()
+    e.dataTransfer.dropEffect = e.dataTransfer.effectAllowed === 'move' ? 'move' : 'copy'
+    const next = slotAt(e.clientX)
+    if (next?.index !== slot?.index || next?.markerX !== slot?.markerX) setSlot(next)
+  }
+
+  const onDrop = (e: DragEvent<HTMLDivElement>): void => {
+    const target = slotAt(e.clientX)
+    setSlot(null)
+    const page = droppedPage((type) => e.dataTransfer.getData(type))
+    if (!page || !target) return
+    e.preventDefault()
+    window.mira.command('add-bookmark-to-bar', { ...page, index: target.index })
+  }
+
   return (
     <div className="bookmarks-bar">
-      <div className="bookmarks-bar-strip" ref={stripRef}>
+      <div
+        className="bookmarks-bar-strip"
+        ref={stripRef}
+        onDragOver={onDragOver}
+        onDragLeave={(e) => {
+          // Leaving for a child item is not leaving the strip.
+          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setSlot(null)
+        }}
+        onDrop={onDrop}
+      >
+        {slot && <span className="bookmarks-bar-drop-marker" style={{ left: slot.markerX }} />}
         {tree.map((node, index) =>
           node.id === editingId ? (
             <input
@@ -145,6 +199,18 @@ export default function BookmarksBar({ tree }: { tree: BookmarkNode[] }): ReactE
               style={
                 hiddenFrom !== null && index >= hiddenFrom ? { visibility: 'hidden' } : undefined
               }
+              draggable={node.kind === 'url'}
+              onDragStart={(e) => {
+                // Reorder: dropping it back on the strip moves the favorite there
+                // (add-bookmark-to-bar does not duplicate a known url).
+                if (node.kind !== 'url' || !node.url) return
+                e.dataTransfer.effectAllowed = 'move'
+                e.dataTransfer.setData(
+                  MIRA_PAGE_MIME,
+                  JSON.stringify({ url: node.url, title: node.title })
+                )
+                e.dataTransfer.setData('text/uri-list', node.url)
+              }}
               onClick={(e) => open(node, e)}
               onAuxClick={(e) => e.button === 1 && open(node, e)}
               onContextMenu={(e) => {

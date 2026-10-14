@@ -89,3 +89,41 @@
   font-size: 12px;
   outline: none;
 }
+
+/* Where a dragged page will land (see drop.ts): a thin accent bar in the gap. */
+.bookmarks-bar-drop-marker {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: var(--accent);
+  pointer-events: none;
+}
+
+/* Address-bar site icon: drag it onto the bar to bookmark the page. */
+.site-drag-handle {
+  -webkit-app-region: no-drag;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 12px;
+  color: var(--color-text);
+  opacity: 0.8;
+  cursor: grab;
+}
+
+.site-drag-handle:hover {
+  background: var(--color-background-mute);
+  opacity: 1;
+}
+
+.site-drag-handle img {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+}
