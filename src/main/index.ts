@@ -14,6 +14,7 @@ import { startCommandSocket, cleanupSocket, type CommandSocketHandle } from './s
 import { FocusFeed } from './focus-feed'
 import { formatCommandEntry, lastCommand } from './command-log'
 import { forwardToRunningInstance, urlsFromArgv } from './single-instance'
+import { bindWindowToProfileLauncher } from './profile-launcher'
 import { ProfileManager, DEFAULT_PROFILE_ID } from './profiles'
 import { CHROME_PARTITION, DEFAULT_SESSION_ALIAS } from './chrome-session'
 import { ExtensionsService } from './extensions'
@@ -540,6 +541,18 @@ app.whenReady().then(async () => {
     // toolbar and the socket).
     runCommand: (wc, name, params) => runDetached(name, params, profiles.contextForChrome(wc))
   })
+
+  // Linux: a window of a profile that has its own launcher (`--profile <id>`)
+  // joins that launcher in the dock instead of the plain Mira one.
+  if (process.platform === 'linux') {
+    app.on('browser-window-created', (_, window) => {
+      window.once('show', () => {
+        const profileId = profiles.profileIdOfWindow(window)
+        if (profileId) bindWindowToProfileLauncher(window, profileId)
+      })
+    })
+  }
+
   quitPromptSetting = {
     get: () => profiles.confirmQuit(),
     set: (enabled) => void profiles.setConfirmQuit(enabled)

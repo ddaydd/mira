@@ -6225,6 +6225,12 @@ export class ProfileManager {
     return this.findByWindow(BrowserWindow.getFocusedWindow())?.id ?? null
   }
 
+  /** The profile a BrowserWindow belongs to, or null for any other window
+   * (overlay, picker, popup). */
+  profileIdOfWindow(window: BrowserWindow): string | null {
+    return this.findByWindow(window)?.id ?? null
+  }
+
   private findByWindow(window: BrowserWindow | null): ProfileWindow | null {
     if (!window) return null
     for (const pw of this.openById.values()) {
