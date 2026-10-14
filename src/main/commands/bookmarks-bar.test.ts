@@ -158,3 +158,29 @@ describe('add-bookmark-to-bar', () => {
     })
   })
 })
+
+describe('bookmark-favicons', () => {
+  it('maps each url to its icon or null', async () => {
+    const { ctx } = makeContext()
+    const res = await createCommandRegistry().execute(
+      'bookmark-favicons',
+      { urls: ['https://known.example/a', 'https://other.example/'] },
+      ctx
+    )
+    expect(res).toEqual({
+      ok: true,
+      icons: {
+        'https://known.example/a': 'https://known.example/i.png',
+        'https://other.example/': null
+      }
+    })
+  })
+
+  it('rejects anything but an array of strings', async () => {
+    const { ctx } = makeContext()
+    expect(await createCommandRegistry().execute('bookmark-favicons', { urls: [1] }, ctx)).toEqual({
+      ok: false,
+      error: '"urls" must be an array of strings'
+    })
+  })
+})

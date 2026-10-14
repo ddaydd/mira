@@ -25,6 +25,9 @@ export interface BookmarksBarContext {
    * `editing` is false when the bar is hidden (nothing to edit in). Throws on an
    * unknown id. */
   editBookmark: (id: string) => { editing: boolean }
+  /** The icon each page url declares (remembered from visits, else read from
+   * the page once), null when unknown (favicon-cache.ts). */
+  bookmarkFavicons: (urls: string[]) => Promise<Record<string, string | null>>
 }
 
 /** Shared x/y validation: both or neither, finite numbers, rounded. */
@@ -118,6 +121,19 @@ export const bookmarksBarCommands: CommandMap<CommandContext> = {
         node,
         index: ctx.listBookmarks().tree.findIndex((n) => n.id === node.id)
       }
+    } catch (error) {
+      return fail(error)
+    }
+  },
+
+  // The bar's icons: what each page declares, not the site's /favicon.ico.
+  'bookmark-favicons': async (ctx, params) => {
+    const { urls } = (params ?? {}) as { urls?: unknown }
+    if (!Array.isArray(urls) || urls.some((u) => typeof u !== 'string')) {
+      return { ok: false, error: '"urls" must be an array of strings' }
+    }
+    try {
+      return { ok: true, icons: await ctx.bookmarkFavicons(urls.slice(0, 500) as string[]) }
     } catch (error) {
       return fail(error)
     }

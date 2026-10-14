@@ -29,8 +29,8 @@ function carriesPage(e: DragEvent): boolean {
   return types.includes(MIRA_PAGE_MIME) || types.includes('text/uri-list')
 }
 
-/** Mira does not store favicons for favorites: ask the site for its
- * /favicon.ico, and fall back to a one-letter badge when that fails. */
+/** Fallback when main knows no icon for the page (bookmark-favicons): the
+ * site's /favicon.ico, then a one-letter badge when that fails too. */
 function faviconUrl(url: string): string | null {
   try {
     const u = new URL(url)
@@ -50,8 +50,8 @@ function initial(node: BookmarkNode): string {
   }
 }
 
-function Icon({ node }: { node: BookmarkNode }): ReactElement {
-  const [broken, setBroken] = useState(false)
+function Icon({ node, icon }: { node: BookmarkNode; icon?: string | null }): ReactElement {
+  const [broken, setBroken] = useState<string | null>(null)
   if (node.kind === 'folder') {
     return (
       <span className="bookmarks-bar-icon" aria-hidden="true">
@@ -59,8 +59,11 @@ function Icon({ node }: { node: BookmarkNode }): ReactElement {
       </span>
     )
   }
-  const src = faviconUrl(node.url ?? '')
-  if (!src || broken) {
+  // The declared icon first; if it fails to load, the site's /favicon.ico.
+  const declared = icon && broken !== icon ? icon : null
+  const fallback = faviconUrl(node.url ?? '')
+  const src = declared ?? (fallback && broken !== fallback ? fallback : null)
+  if (!src) {
     return (
       <span className="bookmarks-bar-icon bookmarks-bar-letter" aria-hidden="true">
         {initial(node)}
@@ -73,7 +76,7 @@ function Icon({ node }: { node: BookmarkNode }): ReactElement {
       src={src}
       alt=""
       draggable={false}
-      onError={() => setBroken(true)}
+      onError={() => setBroken(src)}
     />
   )
 }
@@ -89,6 +92,22 @@ export default function BookmarksBar({ tree }: { tree: BookmarkNode[] }): ReactE
   const [hiddenFrom, setHiddenFrom] = useState<number | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [slot, setSlot] = useState<DropSlot | null>(null)
+  const [icons, setIcons] = useState<Record<string, string | null>>({})
+
+  // The icon each favorite's page declares (main remembers it from visits, or
+  // reads the page once): Google Maps gets its pin, not google.fr's "G".
+  useEffect(() => {
+    const urls = tree.flatMap((n) => (n.kind === 'url' && n.url ? [n.url] : []))
+    if (urls.length === 0) return
+    let alive = true
+    void window.mira.command('bookmark-favicons', { urls }).then((res) => {
+      const r = res as { ok?: boolean; icons?: Record<string, string | null> }
+      if (alive && r.ok && r.icons) setIcons(r.icons)
+    })
+    return () => {
+      alive = false
+    }
+  }, [tree])
 
   useEffect(() => window.mira.onEditBookmark((id) => setEditingId(id)), [])
 
@@ -222,7 +241,7 @@ export default function BookmarksBar({ tree }: { tree: BookmarkNode[] }): ReactE
                 })
               }}
             >
-              <Icon node={node} />
+              <Icon key={icons[node.url ?? ''] ?? ''} node={node} icon={icons[node.url ?? '']} />
               {node.title.trim() && <span className="bookmarks-bar-title">{node.title}</span>}
             </button>
           )

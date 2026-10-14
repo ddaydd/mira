@@ -2139,6 +2139,13 @@ export function makeContext(
     showBookmarksMenu: ({ folderId, fromIndex }) => {
       bookmarksMenuItems(state.bookmarks, folderId, fromIndex)
     },
+    bookmarkFavicons: async (urls: string[]) =>
+      Object.fromEntries(
+        urls.map((u) => [
+          u,
+          u.startsWith('https://known.example') ? 'https://known.example/i.png' : null
+        ])
+      ),
     // Extensions slice: an in-memory per-profile store mirroring the real
     // ExtensionsService (per-session sets, D2). The FOCUSED profile is the
     // target, like the real context is bound to the target window's profile —

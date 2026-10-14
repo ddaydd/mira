@@ -277,6 +277,7 @@ function setup(): {
     showBookmarksMenu: () => {},
     showBookmarkMenu: () => {},
     editBookmark: () => ({ editing: false }),
+    bookmarkFavicons: async () => ({}),
     importChromeBookmarks: () => {
       throw new Error('unused')
     },

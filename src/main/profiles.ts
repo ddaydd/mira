@@ -283,6 +283,7 @@ import {
 } from './input-delivery'
 import { SessionWindowRegistry, firstUserWindow, sessionWindowProfile } from './session-windows'
 import { ClosedWindowStore, reopenWindowFirst, type ClosedWindow } from './closed-windows'
+import { FaviconCache } from './favicon-cache'
 import { ImageSaveDirStore } from './image-save-dir'
 import { ChatHistoryStore, conversationText, type ChatSummary } from './chat-history'
 import { inputReadiness, underlaysSurvive, viewShown } from './input-underlay'
@@ -764,6 +765,14 @@ export class ProfileManager {
   private get closedWindows(): ClosedWindowStore {
     return (this.closedWindowStore ??= new ClosedWindowStore(
       join(app.getPath('userData'), 'closed-windows.json')
+    ))
+  }
+  /** Linux fork: the icon each page declares, for the bookmarks bar
+   * (favicon-cache.ts). Lazy, like closedWindows. */
+  private faviconCacheStore: FaviconCache | null = null
+  private get faviconCache(): FaviconCache {
+    return (this.faviconCacheStore ??= new FaviconCache(
+      join(app.getPath('userData'), 'favicons.json')
     ))
   }
   /** Per-profile "Save Image" folder (image-save-dir.ts). Lazy, like closedWindows. */
@@ -3125,7 +3134,10 @@ export class ProfileManager {
     // the commit — so the freshest 500 ms window must start here. did-navigate is
     // always a cross-document main-frame commit.
     wc.on('did-navigate', () => armIfNeeded({ isMainFrame: true, isSameDocument: false }))
-    wc.on('page-favicon-updated', (_e, favicons) => patch({ favicon: favicons?.[0] ?? null }))
+    wc.on('page-favicon-updated', (_e, favicons) => {
+      patch({ favicon: favicons?.[0] ?? null })
+      this.faviconCache.note(wc.getURL(), favicons?.[0])
+    })
     // A tab starting or stopping sound: refresh the strip so the sidebar speaker
     // icon and the toolbar audio button track it. audible is not stored on the tab
     // (it is read live from the view in tabInfos), so this only needs to push —
@@ -7529,6 +7541,14 @@ export class ProfileManager {
       openBookmark: (id) => this.openBookmarkIn(target, id),
       ungroupBookmarkFolder: (id) => bookmarks().ungroup(id),
       setBookmarksBarVisible: (visible) => this.setBookmarksBarVisible(visible),
+      bookmarkFavicons: (urls) => {
+        const ses = target ? this.sessionFor(target.id) : session.defaultSession
+        return this.faviconCache.resolve(urls, async (url) => {
+          const res = await ses.fetch(url, { signal: AbortSignal.timeout(6000) })
+          if (!res.ok || !(res.headers.get('content-type') ?? '').includes('html')) return null
+          return { url: res.url || url, html: (await res.text()).slice(0, 300_000) }
+        })
+      },
       showBookmarkMenu: (id, at) => {
         if (!target) throw new Error('no target window')
         this.showBookmarkMenuIn(target, id, at)
