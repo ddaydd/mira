@@ -27,6 +27,9 @@ export interface YtdlpProgress {
   partBytes: number
   /** Percent of the current part. */
   partPct: number
+  /** What identifies the current part: its fragment count for a fragmented
+   * (HLS/DASH) stream, whose size is a moving estimate; else its size. */
+  partKey: string
   /** Last `ERROR:` line, without the prefix. */
   error: string
 }
@@ -40,6 +43,7 @@ export function initialProgress(): YtdlpProgress {
     doneBytes: 0,
     partBytes: 0,
     partPct: 0,
+    partKey: '',
     error: ''
   }
 }
@@ -97,11 +101,19 @@ export function feedLine(p: YtdlpProgress, raw: string): YtdlpProgress {
   if (prog) {
     const size = parseSize(prog[2])
     const pct = Math.min(100, Number(prog[1]))
-    // A new size = the next part (audio after video): bank the finished one.
-    if (size > 0 && p.partBytes > 0 && size !== p.partBytes) {
-      return { ...p, doneBytes: p.doneBytes + p.partBytes, partBytes: size, partPct: pct }
+    const frags = /\(frag \d+\/(\d+)\)/.exec(line)
+    const key = frags ? `frag/${frags[1]}` : `size/${size}`
+    // Another part (audio after video): bank the finished one.
+    if (p.partKey && key !== p.partKey) {
+      return {
+        ...p,
+        doneBytes: p.doneBytes + p.partBytes,
+        partBytes: size,
+        partPct: pct,
+        partKey: key
+      }
     }
-    return { ...p, partBytes: size || p.partBytes, partPct: pct }
+    return { ...p, partBytes: size || p.partBytes, partPct: pct, partKey: key }
   }
   if (line.startsWith('[') || line.startsWith('WARNING:')) return p
   // `--print after_move:filepath`: a bare line, printed once the file is in place.

@@ -19,7 +19,7 @@ import {
 } from './focus-restore'
 import { existsSync, readFileSync, rmSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { appendFile, mkdir, readdir, rm, writeFile } from 'node:fs/promises'
+import { appendFile, mkdir, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { basename, dirname, extname, join } from 'node:path'
 import {
   app,
@@ -4957,7 +4957,14 @@ export class ProfileManager {
         await rm(join(folder, name), { force: true }).catch(() => {})
       }
     }
-    const current = this.downloadTracker.get(id)
+    // The real size on disk: a fragmented stream's progress was an estimate.
+    let size = 0
+    if (res.saved && res.file) {
+      size = await stat(res.file).then(
+        (st) => st.size,
+        () => 0
+      )
+    }
     const record = this.downloadTracker.update(
       id,
       res.saved && res.file
@@ -4965,7 +4972,8 @@ export class ProfileManager {
             state: 'completed',
             filename: basename(res.file),
             savePath: res.file,
-            receivedBytes: current?.totalBytes || current?.receivedBytes || 0
+            receivedBytes: size,
+            totalBytes: size
           }
         : res.cancelled
           ? { state: 'cancelled' }

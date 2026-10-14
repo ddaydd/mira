@@ -62,6 +62,24 @@ describe('feedLine', () => {
     expect(progressBytes(q)).toEqual({ received: 2500, total: 3000 })
   })
 
+  it('follows a fragmented stream, whose size estimate moves every line', () => {
+    const p = feed([
+      'MIRA-SIZE 143197696',
+      '[download] 100.0% of ~   712.00B at    2.11KiB/s ETA Unknown (frag 0/1568)',
+      '[download]   0.0% of ~   2.13MiB at    2.11KiB/s ETA Unknown (frag 1/1568)',
+      '[download]   0.3% of ~  97.77MiB at  129.20KiB/s ETA Unknown (frag 1/1568)',
+      '[download]  50.0% of ~   4.00GiB at    2.38MiB/s ETA 10:00 (frag 784/1568)'
+    ])
+    expect(p.doneBytes).toBe(0)
+    expect(progressBytes(p)).toEqual({ received: 2 * 1024 ** 3, total: 4 * 1024 ** 3 })
+    // Then the audio, a plain file: the video is banked at its last estimate.
+    const q = feed([
+      '[download] 100% of ~   4.00GiB in 00:20:00 at 3MiB/s (frag 1568/1568)',
+      '[download]  50.0% of  100.00MiB at 1MiB/s ETA 00:10'
+    ])
+    expect(q.doneBytes).toBe(4 * 1024 ** 3)
+  })
+
   it('falls back to the parts seen so far when no size was announced', () => {
     const p = feed(['[download]  25.0% of  4.00KiB at Unknown B/s ETA Unknown'])
     expect(progressBytes(p)).toEqual({ received: 1024, total: 4096 })
