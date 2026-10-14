@@ -488,6 +488,7 @@ app.whenReady().then(async () => {
     // Seed the panel widths from persisted settings (resizable at runtime); the
     // SIDEBAR_WIDTH / SKILL_PANE_WIDTH constants are only the CSS fallback default.
     sidebarWidth: initialSettings.sidebarWidth,
+    sidebarWidths: initialSettings.sidebarWidths,
     skillPaneWidth: initialSettings.skillPaneWidth,
     homeUrl: initialSettings.homeUrl,
     initialLlm: initialSettings.llm,

@@ -217,3 +217,19 @@ describe('DEFAULT_HOME_URL', () => {
     expect(defaultLlm()).toEqual({ provider: 'claude-cli' })
   })
 })
+
+describe('per-profile sidebar width', () => {
+  it('resizes one profile and leaves the others on the shared width', async () => {
+    const { sidebarWidthFor, withProfileSidebarWidth } = await import('./settings-store')
+    const base = normalizeSettings({ sidebarWidth: 260 })
+    const next = withProfileSidebarWidth(base, 'termix', 320)
+    expect(sidebarWidthFor(next, 'termix')).toBe(320)
+    expect(sidebarWidthFor(next, 'default')).toBe(260)
+  })
+
+  it('keeps persisted widths and drops non-numbers', () => {
+    const s = normalizeSettings({ sidebarWidths: { a: 300, b: 'x' } })
+    expect(s.sidebarWidths).toEqual({ a: 300 })
+    expect(normalizeSettings({}).sidebarWidths).toBeUndefined()
+  })
+})

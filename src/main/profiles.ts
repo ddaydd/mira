@@ -296,6 +296,8 @@ import {
   withHomeUrl,
   withLlm,
   withSidebarWidth,
+  withProfileSidebarWidth,
+  sidebarWidthFor,
   withSkillPaneWidth,
   withMagnifierEnabled,
   withBookmarksBarVisible,
@@ -550,6 +552,8 @@ export interface ProfileManagerDeps {
   /** Width of the left tab panel when shown; the active view sits to its right.
    * Must match --sidebar-width in the renderer CSS. */
   sidebarWidth: number
+  /** Per-profile tab panel widths (settings-store `sidebarWidths`). */
+  sidebarWidths?: Record<string, number>
   /** Width of the right skill pane when open; the active view is shrunk by it so
    * the pane sits beside the page. Must match --skill-pane-width in the CSS. */
   skillPaneWidth: number
@@ -865,6 +869,7 @@ export class ProfileManager {
       homeUrl: deps.homeUrl,
       llm: deps.initialLlm,
       sidebarWidth: deps.sidebarWidth,
+      sidebarWidths: deps.sidebarWidths ?? {},
       skillPaneWidth: deps.skillPaneWidth,
       magnifierEnabled: deps.magnifierEnabled,
       bookmarksBarVisible: deps.bookmarksBarVisible,
@@ -3303,7 +3308,7 @@ export class ProfileManager {
     const { width, height } = pw.window.getContentBounds()
     // Panel widths are live (resizable): read the current settings, not the
     // startup deps, so a drag repositions the web view immediately.
-    const x = pw.panelCollapsed ? 0 : this.appSettings.sidebarWidth
+    const x = pw.panelCollapsed ? 0 : sidebarWidthFor(this.appSettings, pw.id)
     // Zen (focus) mode hides the toolbar AND the status bar: the chrome removes
     // both from the DOM (App.tsx), so the native view must fill the space they
     // left — start at y=0 and take the full window height.
@@ -6742,7 +6747,11 @@ export class ProfileManager {
         if (!target || target.window.isDestroyed()) throw new Error('no target window')
         this.openSettingsTabIn(target, section)
       },
-      getSettings: () => ({ ...this.appSettings }),
+      // sidebarWidth answers for the target window's profile (per-profile widths).
+      getSettings: () => ({
+        ...this.appSettings,
+        ...(target ? { sidebarWidth: sidebarWidthFor(this.appSettings, target.id) } : {})
+      }),
       setHomeUrl: (url) => {
         this.appSettings = withHomeUrl(this.appSettings, url)
         this.deps.persistSettings(this.appSettings)
@@ -6755,9 +6764,15 @@ export class ProfileManager {
         return { ...this.appSettings }
       },
       setSidebarWidth: (width) => {
-        this.appSettings = withSidebarWidth(this.appSettings, width)
+        // Per profile: dragging one window's panel must not resize the others.
+        this.appSettings = target
+          ? withProfileSidebarWidth(this.appSettings, target.id, width)
+          : withSidebarWidth(this.appSettings, width)
         this.applyPanelWidths()
-        return { ...this.appSettings }
+        return {
+          ...this.appSettings,
+          ...(target ? { sidebarWidth: sidebarWidthFor(this.appSettings, target.id) } : {})
+        }
       },
       setSkillPaneWidth: (width) => {
         this.appSettings = withSkillPaneWidth(this.appSettings, width)

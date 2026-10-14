@@ -16,6 +16,9 @@ export interface AppSettings {
   llm: LlmConfig
   /** Width (px) of the left tab panel — resizable by dragging its edge. */
   sidebarWidth: number
+  /** Per-profile tab panel widths (profile id → px), so resizing one profile's
+   * panel leaves the others alone. A profile without an entry uses sidebarWidth. */
+  sidebarWidths?: Record<string, number>
   /** Width (px) of the right skill pane — resizable by dragging its edge. */
   skillPaneWidth: number
   /** Whether Cmd+scroll zooms the page (the optical magnifier gesture). Off by
@@ -105,6 +108,7 @@ export function normalizeSettings(raw: unknown): AppSettings {
     homeUrl,
     llm: normalizeLlm(v.llm),
     sidebarWidth: clampWidth(v.sidebarWidth, SIDEBAR_WIDTH),
+    ...normalizeSidebarWidths(v.sidebarWidths),
     skillPaneWidth: clampWidth(v.skillPaneWidth, SKILL_PANE_WIDTH),
     // Anything but an explicit true (including a legacy file without the key)
     // keeps the gesture off — off is the safe default.
@@ -130,6 +134,33 @@ export function withLlm(settings: AppSettings, llm: unknown): AppSettings {
 /** Return settings with a clamped sidebar width. */
 export function withSidebarWidth(settings: AppSettings, width: number): AppSettings {
   return { ...settings, sidebarWidth: clampWidth(width, SIDEBAR_WIDTH) }
+}
+
+/** `{ sidebarWidths }` when the file has any, else nothing (key left out). */
+function normalizeSidebarWidths(raw: unknown): { sidebarWidths?: Record<string, number> } {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {}
+  const out: Record<string, number> = {}
+  for (const [id, width] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof width === 'number') out[id] = clampWidth(width, SIDEBAR_WIDTH)
+  }
+  return Object.keys(out).length > 0 ? { sidebarWidths: out } : {}
+}
+
+/** The tab panel width of one profile: its own, else the shared one. */
+export function sidebarWidthFor(settings: AppSettings, profileId: string): number {
+  return settings.sidebarWidths?.[profileId] ?? settings.sidebarWidth
+}
+
+/** Return settings with a clamped tab panel width for ONE profile. */
+export function withProfileSidebarWidth(
+  settings: AppSettings,
+  profileId: string,
+  width: number
+): AppSettings {
+  return {
+    ...settings,
+    sidebarWidths: { ...settings.sidebarWidths, [profileId]: clampWidth(width, SIDEBAR_WIDTH) }
+  }
 }
 
 /** Return settings with a clamped skill-pane width. */
