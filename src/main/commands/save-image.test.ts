@@ -50,3 +50,20 @@ describe('save-image-as', () => {
     ).toEqual({ ok: true, cancelled: true })
   })
 })
+
+describe('save-video-as', () => {
+  it('returns the file saved in the picked folder, or a cancelled dialog', async () => {
+    const { ctx } = makeContext()
+    const registry = createCommandRegistry()
+    expect(
+      await registry.execute('save-video-as', { url: 'https://x.test/c.mp4', stream: true }, ctx)
+    ).toEqual({ ok: true, file: '/fake/videos/c.mp4' })
+    expect(
+      await registry.execute('save-video-as', { url: 'https://x.test/cancel.mp4' }, ctx)
+    ).toEqual({ ok: true, cancelled: true })
+    expect(await registry.execute('save-video-as', {}, ctx)).toEqual({
+      ok: false,
+      error: 'missing "url"'
+    })
+  })
+})

@@ -51,6 +51,9 @@ export type PageMenuItem =
   // only the popup has, so like `download-stream` this pure function just emits
   // the intent and the popup resolves it against the live webContents.
   | { type: 'inspect-element'; label: string }
+  // Linux fork: "Save Video As…" (pick a folder) / "Copy Video Address" on a
+  // streamed video. Like `download-stream`, the permalink is resolved by the popup.
+  | { type: 'stream-video'; action: 'save-as' | 'copy-link'; label: string }
 
 /** Decide the menu for a right-click. Always offers navigation (back / forward /
  * reload); adds a link group when on a link, and a clipboard group when in an
@@ -67,6 +70,7 @@ export function buildPageMenu(ctx: PageContext): PageMenuItem[] {
   // path; a streamed video (blob:/MSE) has no file, so it routes to yt-dlp.
   const mediaItem = buildMediaItem(ctx.mediaType, ctx.srcURL)
   if (mediaItem) items.push({ type: 'separator' }, mediaItem)
+  if (ctx.mediaType === 'video') items.push(...buildVideoExtraItems(ctx.srcURL))
 
   // Chrome-style "Open Image in New Tab": same `new-tab` command as a link.
   if (ctx.mediaType === 'image' && ctx.srcURL) {
@@ -186,4 +190,33 @@ export function buildMediaItem(mediaType: string, srcURL: string): PageMenuItem 
     }
   }
   return null
+}
+
+/** Linux fork: the items under "Download Video" — save into a folder the user
+ * picks, and copy the video's address. A streamed video (blob:/empty src) has no
+ * file URL: both go through its permalink, resolved in-page by the popup. Pure. */
+export function buildVideoExtraItems(srcURL: string): PageMenuItem[] {
+  const streamed = !srcURL || srcURL.startsWith('blob:')
+  if (streamed) {
+    return [
+      { type: 'stream-video', action: 'save-as', label: 'Save Video As…' },
+      { type: 'stream-video', action: 'copy-link', label: 'Copy Video Address' }
+    ]
+  }
+  return [
+    {
+      type: 'command',
+      command: 'save-video-as',
+      params: { url: srcURL },
+      label: 'Save Video As…',
+      enabled: true
+    },
+    {
+      type: 'command',
+      command: 'copy-text',
+      params: { text: srcURL },
+      label: 'Copy Video Address',
+      enabled: true
+    }
+  ]
 }

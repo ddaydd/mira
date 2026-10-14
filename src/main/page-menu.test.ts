@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   buildPageMenu,
   buildMediaItem,
+  buildVideoExtraItems,
   imageUnderPointSource,
   needsImageProbe,
   type PageContext
@@ -168,5 +169,46 @@ describe('image probe through overlays', () => {
     expect(needsImageProbe('none')).toBe(true)
     expect(needsImageProbe('image')).toBe(false)
     expect(needsImageProbe('video')).toBe(false)
+  })
+})
+
+describe('buildVideoExtraItems (Linux fork)', () => {
+  it('saves a plain-file video into a picked folder and copies its src', () => {
+    expect(buildVideoExtraItems('https://x.com/clip.mp4')).toEqual([
+      {
+        type: 'command',
+        command: 'save-video-as',
+        params: { url: 'https://x.com/clip.mp4' },
+        label: 'Save Video As…',
+        enabled: true
+      },
+      {
+        type: 'command',
+        command: 'copy-text',
+        params: { text: 'https://x.com/clip.mp4' },
+        label: 'Copy Video Address',
+        enabled: true
+      }
+    ])
+  })
+
+  it('routes a streamed video through its permalink', () => {
+    expect(buildVideoExtraItems('blob:x')).toEqual([
+      { type: 'stream-video', action: 'save-as', label: 'Save Video As…' },
+      { type: 'stream-video', action: 'copy-link', label: 'Copy Video Address' }
+    ])
+  })
+
+  it('appears under Download Video in the page menu, and only for video', () => {
+    const items = buildPageMenu({ ...base, mediaType: 'video', srcURL: 'blob:x' })
+    const labels = items.map((i) => ('label' in i ? i.label : '-'))
+    const at = labels.indexOf('Download Video')
+    expect(labels.slice(at, at + 3)).toEqual([
+      'Download Video',
+      'Save Video As…',
+      'Copy Video Address'
+    ])
+    const image = buildPageMenu({ ...base, mediaType: 'image', srcURL: 'https://x.com/a.png' })
+    expect(image.some((i) => 'label' in i && i.label === 'Save Video As…')).toBe(false)
   })
 })

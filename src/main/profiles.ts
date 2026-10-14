@@ -782,6 +782,13 @@ export class ProfileManager {
       join(app.getPath('userData'), 'image-save-dirs.json')
     ))
   }
+  /** Linux fork: per-profile "Save Video As…" folder, same store as images. */
+  private videoSaveDirStore: ImageSaveDirStore | null = null
+  private get videoSaveDirs(): ImageSaveDirStore {
+    return (this.videoSaveDirStore ??= new ImageSaveDirStore(
+      join(app.getPath('userData'), 'video-save-dirs.json')
+    ))
+  }
   private sessionReaper: ReturnType<typeof setInterval> | null = null
   private static readonly SESSION_REAP_MS = 30_000
   /** yt-dlp video downloads in flight, keyed by a unique id, with when each
@@ -4876,12 +4883,13 @@ export class ProfileManager {
    * tab to the playing page. Registered in activeDownloads so the status bar shows
    * a download is in flight. Resolves with the saved basename or a clean error. */
   private async downloadVideoUrl(
-    pageUrl: string
+    pageUrl: string,
+    dir = app.getPath('downloads')
   ): Promise<{ saved: boolean; file?: string; error?: string }> {
     const id = ++this.downloadSeq
     this.activeDownloads.set(id, { startedAt: Date.now() })
     try {
-      return await ytdlpDownload(pageUrl, app.getPath('downloads'), process.env)
+      return await ytdlpDownload(pageUrl, dir, process.env)
     } finally {
       this.activeDownloads.delete(id)
     }
@@ -5444,6 +5452,13 @@ export class ProfileManager {
             click: () => void this.downloadStreamAt(wc, params.x, params.y)
           }
         }
+        if (item.type === 'stream-video') {
+          // Linux fork: same permalink resolution as `download-stream`.
+          return {
+            label: item.label,
+            click: () => void this.streamVideoAt(wc, params.x, params.y, item.action)
+          }
+        }
         if (item.type === 'inspect-element') {
           // Open the docked DevTools and select the element at the click point.
           return {
@@ -5608,6 +5623,26 @@ export class ProfileManager {
       this.deps.runCommand?.(wc, 'download-video-url', { url })
     } catch (error) {
       console.error('[mira] download-stream: could not resolve video URL', error)
+    }
+  }
+
+  /** Linux fork: "Save Video As…" / "Copy Video Address" on a streamed video —
+   * the permalink resolved like downloadStreamAt, then a folder-picking yt-dlp
+   * download or a copy. */
+  private async streamVideoAt(
+    wc: WebContents,
+    x: number,
+    y: number,
+    action: 'save-as' | 'copy-link'
+  ): Promise<void> {
+    try {
+      const resolved = (await evalInWebContents(wc, nearestVideoPermalinkSource(x, y))) as unknown
+      const url = typeof resolved === 'string' && resolved ? resolved : wc.getURL()
+      if (!url) return
+      if (action === 'copy-link') this.deps.runCommand?.(wc, 'copy-text', { text: url })
+      else this.deps.runCommand?.(wc, 'save-video-as', { url, stream: true })
+    } catch (error) {
+      console.error('[mira] stream-video: could not resolve video URL', error)
     }
   }
 
@@ -6891,6 +6926,33 @@ export class ProfileManager {
       getImageSaveDir: () => {
         if (!target) throw new Error('no target window')
         return this.imageSaveDirs.dirFor(target.id, app.getPath('downloads'))
+      },
+      saveVideoAs: async (url, stream, tabId) => {
+        if (!target) throw new Error('no target window')
+        const { canceled, filePaths } = await dialog.showOpenDialog(target.window, {
+          title: 'Save Video In…',
+          buttonLabel: 'Save Here',
+          defaultPath: this.videoSaveDirs.dirFor(target.id, app.getPath('downloads')),
+          properties: ['openDirectory', 'createDirectory']
+        })
+        const dir = filePaths[0]
+        if (canceled || !dir) return { file: null }
+        this.videoSaveDirs.remember(target.id, dir)
+        let file: string
+        if (stream) {
+          if (!target.window.isDestroyed()) void showToast(target, 'Downloading video…')
+          const res = await this.downloadVideoUrl(url, dir)
+          if (!res.saved) {
+            if (!target.window.isDestroyed()) void showToast(target, 'Video download failed')
+            throw new Error(res.error ?? 'download failed')
+          }
+          file = join(dir, res.file ?? '')
+        } else {
+          const { wc } = this.resolveMediaTab(target, tabId)
+          file = await this.saveMediaUrl(wc, url, dir, new Set())
+        }
+        if (!target.window.isDestroyed()) void showToast(target, `Saved ${basename(file)}`)
+        return { file }
       },
       downloadVideoUrl: async (url) => {
         // yt-dlp runs as its own process on the permalink — no tab needed. (The
