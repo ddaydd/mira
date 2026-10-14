@@ -45,7 +45,8 @@ export function normalizeDownloadHistory(raw: unknown): DownloadRecord[] {
       seen: true,
       startedAt,
       updatedAt: num(r.updatedAt) || startedAt,
-      profileId: typeof r.profileId === 'string' ? r.profileId : ''
+      profileId: typeof r.profileId === 'string' ? r.profileId : '',
+      ...(typeof r.error === 'string' && r.error ? { error: r.error } : {})
     })
   }
   out.sort((a, b) => b.startedAt - a.startedAt)

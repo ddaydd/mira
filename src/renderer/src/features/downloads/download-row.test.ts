@@ -57,6 +57,9 @@ describe('downloadStatus', () => {
     expect(downloadStatus(row({ missing: true }))).toBe('Deleted')
     expect(downloadStatus(row({ state: 'cancelled' }))).toBe('Cancelled')
     expect(downloadStatus(row({ state: 'interrupted' }))).toBe('Failed')
+    expect(downloadStatus(row({ state: 'interrupted', error: 'HTTP Error 403: Forbidden' }))).toBe(
+      'Failed — HTTP Error 403: Forbidden'
+    )
   })
 })
 

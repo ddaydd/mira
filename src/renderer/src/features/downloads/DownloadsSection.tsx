@@ -52,8 +52,9 @@ export function DownloadsSection(): React.JSX.Element {
   return (
     <div className="settings-section">
       <p className="settings-hint">
-        Every file Mira downloaded, newest first. Files are saved straight to your Downloads folder.
-        Removing an entry from this list leaves the file on disk.
+        Every file and video Mira downloaded, newest first. Files go straight to your Downloads
+        folder, and so do videos, unless you pick another folder with Save Video As… Removing an
+        entry from this list leaves the file on disk.
       </p>
       <div className="settings-section-head">
         <button className="btn btn-ghost" onClick={() => void act('open-downloads-folder')}>
@@ -72,7 +73,7 @@ export function DownloadsSection(): React.JSX.Element {
         <ul className="downloads-list">
           {list.map((d) => {
             const percent = downloadPercent(d)
-            const gone = d.state !== 'completed' || d.missing
+            const gone = d.state === 'cancelled' || d.state === 'interrupted' || d.missing
             return (
               <li key={d.id} className={`downloads-item${gone ? ' gone' : ''}`}>
                 <div className="downloads-main">

@@ -54,6 +54,12 @@ describe('normalizeDownloadHistory', () => {
     expect(r.paused).toBe(false)
   })
 
+  it('keeps the reason a download failed across a restart', () => {
+    const [r] = normalizeDownloadHistory([rec('a', 1, { state: 'interrupted', error: 'HTTP 403' })])
+    expect(r.error).toBe('HTTP 403')
+    expect('error' in normalizeDownloadHistory([rec('b', 1)])[0]).toBe(false)
+  })
+
   it('marks restored records seen, newest first, capped', () => {
     const raw = Array.from({ length: DOWNLOAD_HISTORY_LIMIT + 5 }, (_, i) => rec(`r${i}`, i))
     const out = normalizeDownloadHistory(raw)

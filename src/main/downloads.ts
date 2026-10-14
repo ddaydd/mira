@@ -39,6 +39,8 @@ export interface DownloadRecord {
   updatedAt: number
   /** Profile whose session the download belongs to (routes the completion toast). */
   profileId: string
+  /** Linux fork: why an `interrupted` download failed, when known (yt-dlp). */
+  error?: string
 }
 
 /** Still running (whether or not paused). The three terminal states are inactive. */

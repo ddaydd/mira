@@ -19,7 +19,7 @@ import {
 } from './focus-restore'
 import { existsSync, readFileSync, rmSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { appendFile, mkdir, writeFile } from 'node:fs/promises'
+import { appendFile, mkdir, readdir, rm, writeFile } from 'node:fs/promises'
 import { basename, dirname, extname, join } from 'node:path'
 import {
   app,
@@ -79,6 +79,7 @@ import { PageConsoleStore, attachedSessionId, draftFromCdpMessage } from './page
 import { isAbortedLoad, isExpectedExit, processGoneLine, subframeFailureLine } from './frame-trace'
 import { MediaBuffer, captureStats, fileNameFor, mergeMedia } from './media-capture'
 import { MEDIA_COLLECT_SOURCE, nearestVideoPermalinkSource, parseDomMedia } from './media-collect'
+import { leftoverParts, progressBytes, runYtdlpTracked } from './ytdlp-progress'
 import { audioAnalysisSource, type AudioAnalysis } from './audio-analysis'
 import { ytdlpDownload } from './ytdlp'
 import {
@@ -808,6 +809,8 @@ export class ProfileManager {
     join(app.getPath('userData'), 'downloads.json')
   )
   private readonly downloadItems = new Map<string, DownloadItem>()
+  /** Linux fork: yt-dlp downloads in the tracker, by record id (cancel = abort). */
+  private readonly videoDownloads = new Map<string, AbortController>()
   private readonly downloadSessions = new Set<string>()
   /** Source URL of the download page a tab currently shows (a navigation that
    * resolved into a file download — see trackDownload). wireView's mirrorUrl
@@ -4884,8 +4887,11 @@ export class ProfileManager {
    * a download is in flight. Resolves with the saved basename or a clean error. */
   private async downloadVideoUrl(
     pageUrl: string,
-    dir = app.getPath('downloads')
+    dir = app.getPath('downloads'),
+    profileId = ''
   ): Promise<{ saved: boolean; file?: string; error?: string }> {
+    // Linux fork: listed in Settings → Downloads, with progress and errors.
+    if (process.platform !== 'darwin') return this.trackVideoDownload(pageUrl, dir, profileId)
     const id = ++this.downloadSeq
     this.activeDownloads.set(id, { startedAt: Date.now() })
     try {
@@ -4893,6 +4899,86 @@ export class ProfileManager {
     } finally {
       this.activeDownloads.delete(id)
     }
+  }
+
+  /** Linux fork: a yt-dlp download as a downloads-tracker record — its title,
+   * live progress, the reason it failed — cancellable like a file download.
+   * Resolves like downloadVideoUrl (basename of the saved file). */
+  private async trackVideoDownload(
+    pageUrl: string,
+    dir: string,
+    profileId: string
+  ): Promise<{ saved: boolean; file?: string; error?: string }> {
+    const id = randomUUID()
+    const startedAt = Date.now()
+    const abort = new AbortController()
+    this.videoDownloads.set(id, abort)
+    this.downloadTracker.add({
+      id,
+      url: pageUrl,
+      filename: pageUrl,
+      savePath: dir,
+      state: 'progressing',
+      receivedBytes: 0,
+      totalBytes: 0,
+      paused: false,
+      startedAt,
+      updatedAt: startedAt,
+      profileId
+    })
+    this.broadcastDownloadsChanged()
+    let lastPush = 0
+    const res = await runYtdlpTracked(
+      pageUrl,
+      dir,
+      process.env,
+      (p) => {
+        const { received, total } = progressBytes(p)
+        const name = p.file ? basename(p.file) : p.title || pageUrl
+        this.downloadTracker.update(
+          id,
+          { filename: name, receivedBytes: received, totalBytes: total },
+          Date.now()
+        )
+        // Progress lines come several times a second: refresh the chrome 4×/s.
+        if (Date.now() - lastPush > 250) {
+          lastPush = Date.now()
+          this.broadcastDownloadsChanged()
+        }
+      },
+      abort.signal
+    )
+    this.videoDownloads.delete(id)
+    // Like Chrome: a stopped download leaves no partial files behind.
+    if (!res.saved && res.plannedFile) {
+      const folder = dirname(res.plannedFile)
+      const names = await readdir(folder).catch(() => [] as string[])
+      for (const name of leftoverParts(res.plannedFile, names)) {
+        await rm(join(folder, name), { force: true }).catch(() => {})
+      }
+    }
+    const current = this.downloadTracker.get(id)
+    const record = this.downloadTracker.update(
+      id,
+      res.saved && res.file
+        ? {
+            state: 'completed',
+            filename: basename(res.file),
+            savePath: res.file,
+            receivedBytes: current?.totalBytes || current?.receivedBytes || 0
+          }
+        : res.cancelled
+          ? { state: 'cancelled' }
+          : { state: 'interrupted', error: res.error ?? 'download failed' },
+      Date.now()
+    )
+    this.broadcastDownloadsChanged()
+    if (record) {
+      const host = this.aWindowForProfile(profileId)
+      if (host) void showToast(host, completionMessage(record))
+    }
+    if (res.saved) return { saved: true, file: res.file ? basename(res.file) : undefined }
+    return { saved: false, error: res.cancelled ? 'cancelled' : res.error }
   }
 
   /** Tear down a tab's docked DevTools host view (if any): remove it from the
@@ -6938,26 +7024,21 @@ export class ProfileManager {
         const dir = filePaths[0]
         if (canceled || !dir) return { file: null }
         this.videoSaveDirs.remember(target.id, dir)
-        let file: string
         if (stream) {
-          if (!target.window.isDestroyed()) void showToast(target, 'Downloading video…')
-          const res = await this.downloadVideoUrl(url, dir)
-          if (!res.saved) {
-            if (!target.window.isDestroyed()) void showToast(target, 'Video download failed')
-            throw new Error(res.error ?? 'download failed')
-          }
-          file = join(dir, res.file ?? '')
-        } else {
-          const { wc } = this.resolveMediaTab(target, tabId)
-          file = await this.saveMediaUrl(wc, url, dir, new Set())
+          // Progress, failure and the closing toast: Settings → Downloads.
+          const res = await this.downloadVideoUrl(url, dir, target.id)
+          if (!res.saved) throw new Error(res.error ?? 'download failed')
+          return { file: join(dir, res.file ?? '') }
         }
+        const { wc } = this.resolveMediaTab(target, tabId)
+        const file = await this.saveMediaUrl(wc, url, dir, new Set())
         if (!target.window.isDestroyed()) void showToast(target, `Saved ${basename(file)}`)
         return { file }
       },
       downloadVideoUrl: async (url) => {
         // yt-dlp runs as its own process on the permalink — no tab needed. (The
         // permalink was resolved from the tab's DOM by the gallery / context menu.)
-        return this.downloadVideoUrl(url)
+        return this.downloadVideoUrl(url, undefined, target?.id)
       },
       getMediaStats: () => {
         const base = target ? captureStats(target.media.values()) : { count: 0, bytes: 0 }
@@ -6972,6 +7053,9 @@ export class ProfileManager {
       listDownloads: () => this.downloadTracker.list(),
       cancelDownload: (id) => {
         const item = this.downloadItems.get(id)
+        const video = this.videoDownloads.get(id)
+        if (video) video.abort()
+        if (video) return true
         if (!item) return false
         item.cancel()
         return true

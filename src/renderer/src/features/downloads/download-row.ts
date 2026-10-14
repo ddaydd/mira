@@ -13,6 +13,8 @@ export interface DownloadRow {
   startedAt: number
   updatedAt: number
   missing?: boolean
+  /** Why a failed download failed, when known (a yt-dlp video). */
+  error?: string
 }
 
 /** Human size like "4.2 MB" (same rounding as main's formatSize). */
@@ -48,7 +50,7 @@ export function downloadStatus(row: DownloadRow): string {
     return row.paused ? `Paused — ${progress}` : progress
   }
   if (row.state === 'cancelled') return 'Cancelled'
-  if (row.state === 'interrupted') return 'Failed'
+  if (row.state === 'interrupted') return row.error ? `Failed — ${row.error}` : 'Failed'
   if (row.missing) return 'Deleted'
   return formatSize(row.totalBytes || row.receivedBytes)
 }
