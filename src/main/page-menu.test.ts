@@ -199,6 +199,34 @@ describe('buildVideoExtraItems (Linux fork)', () => {
     ])
   })
 
+  it('offers the last video folder in one click, above Save Video As…', () => {
+    const stream = buildVideoExtraItems('blob:x', '/home/me/clips/')
+    expect(stream[0]).toEqual({
+      type: 'stream-video',
+      action: 'save-to',
+      label: 'Save Video to "clips"'
+    })
+    expect(stream.map((i) => ('label' in i ? i.label : '-'))).toEqual([
+      'Save Video to "clips"',
+      'Save Video As…',
+      'Copy Video Address'
+    ])
+    expect(buildVideoExtraItems('https://x.com/clip.mp4', '/home/me/clips')[0]).toEqual({
+      type: 'command',
+      command: 'save-video',
+      params: { url: 'https://x.com/clip.mp4' },
+      label: 'Save Video to "clips"',
+      enabled: true
+    })
+    const menu = buildPageMenu({
+      ...base,
+      mediaType: 'video',
+      srcURL: 'blob:x',
+      videoSaveDir: '/home/me/clips'
+    })
+    expect(menu.some((i) => 'label' in i && i.label === 'Save Video to "clips"')).toBe(true)
+  })
+
   it('appears under Download Video in the page menu, and only for video', () => {
     const items = buildPageMenu({ ...base, mediaType: 'video', srcURL: 'blob:x' })
     const labels = items.map((i) => ('label' in i ? i.label : '-'))

@@ -5528,7 +5528,8 @@ export class ProfileManager {
         canGoBack: wc.navigationHistory.canGoBack(),
         canGoForward: wc.navigationHistory.canGoForward(),
         mediaType,
-        srcURL
+        srcURL,
+        videoSaveDir: mediaType === 'video' ? this.videoSaveDirs.dirFor(pw.id, '') : ''
       })
       const template: MenuItemConstructorOptions[] = items.map((item) => {
         if (item.type === 'separator') return { type: 'separator' }
@@ -5727,17 +5728,40 @@ export class ProfileManager {
     wc: WebContents,
     x: number,
     y: number,
-    action: 'save-as' | 'copy-link'
+    action: 'save-to' | 'save-as' | 'copy-link'
   ): Promise<void> {
     try {
       const resolved = (await evalInWebContents(wc, nearestVideoPermalinkSource(x, y))) as unknown
       const url = typeof resolved === 'string' && resolved ? resolved : wc.getURL()
       if (!url) return
       if (action === 'copy-link') this.deps.runCommand?.(wc, 'copy-text', { text: url })
-      else this.deps.runCommand?.(wc, 'save-video-as', { url, stream: true })
+      else {
+        const command = action === 'save-to' ? 'save-video' : 'save-video-as'
+        this.deps.runCommand?.(wc, command, { url, stream: true })
+      }
     } catch (error) {
       console.error('[mira] stream-video: could not resolve video URL', error)
     }
+  }
+
+  /** Linux fork: save a video into `dir` — a `stream` permalink through yt-dlp
+   * (progress in Settings → Downloads), a file url fetched with the tab's session. */
+  private async saveVideoInto(
+    target: ProfileWindow,
+    url: string,
+    stream: boolean,
+    dir: string,
+    tabId?: string
+  ): Promise<{ file: string }> {
+    if (stream) {
+      const res = await this.downloadVideoUrl(url, dir, target.id)
+      if (!res.saved) throw new Error(res.error ?? 'download failed')
+      return { file: join(dir, res.file ?? '') }
+    }
+    const { wc } = this.resolveMediaTab(target, tabId)
+    const file = await this.saveMediaUrl(wc, url, dir, new Set())
+    if (!target.window.isDestroyed()) void showToast(target, `Saved ${basename(file)}`)
+    return { file }
   }
 
   /** Open the docked DevTools for the right-clicked tab and reveal the Elements
@@ -7032,16 +7056,12 @@ export class ProfileManager {
         const dir = filePaths[0]
         if (canceled || !dir) return { file: null }
         this.videoSaveDirs.remember(target.id, dir)
-        if (stream) {
-          // Progress, failure and the closing toast: Settings → Downloads.
-          const res = await this.downloadVideoUrl(url, dir, target.id)
-          if (!res.saved) throw new Error(res.error ?? 'download failed')
-          return { file: join(dir, res.file ?? '') }
-        }
-        const { wc } = this.resolveMediaTab(target, tabId)
-        const file = await this.saveMediaUrl(wc, url, dir, new Set())
-        if (!target.window.isDestroyed()) void showToast(target, `Saved ${basename(file)}`)
-        return { file }
+        return this.saveVideoInto(target, url, stream, dir, tabId)
+      },
+      saveVideo: async (url, stream, tabId) => {
+        if (!target) throw new Error('no target window')
+        const dir = this.videoSaveDirs.dirFor(target.id, app.getPath('downloads'))
+        return this.saveVideoInto(target, url, stream, dir, tabId)
       },
       downloadVideoUrl: async (url) => {
         // yt-dlp runs as its own process on the permalink — no tab needed. (The

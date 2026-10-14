@@ -1662,6 +1662,7 @@ export function makeContext(
     getImageSaveDir: () => imageSaveDir.value,
     saveVideoAs: async (url: string) =>
       url.includes('cancel') ? { file: null } : { file: `/fake/videos/${url.split('/').pop()}` },
+    saveVideo: async (url: string) => ({ file: `/fake/videos/${url.split('/').pop()}` }),
     listChatHistory: () => [],
     getChatConversation: (id: string) => {
       throw new Error(`unknown conversation: ${id}`)

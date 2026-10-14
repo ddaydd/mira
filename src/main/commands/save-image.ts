@@ -18,6 +18,9 @@ export interface SaveImageContext {
    * there — a file url fetched directly, a `stream` permalink through yt-dlp.
    * null when cancelled. */
   saveVideoAs: (url: string, stream: boolean, tabId?: string) => Promise<{ file: string | null }>
+  /** Linux fork: save the video straight into the profile's last video folder
+   * (Downloads when none), no dialog. */
+  saveVideo: (url: string, stream: boolean, tabId?: string) => Promise<{ file: string }>
 }
 
 function readParams(params: unknown): { url: string; tabId?: string } | string {
@@ -62,6 +65,18 @@ export const saveImageCommands: CommandMap<CommandContext> = {
     try {
       const { file } = await ctx.saveVideoAs(p.url, stream === true, p.tabId)
       return file ? { ok: true, file } : { ok: true, cancelled: true }
+    } catch (error) {
+      return fail(error)
+    }
+  },
+
+  // Linux fork. Same params as save-video-as; the one-click "Save Video to …".
+  'save-video': async (ctx, params) => {
+    const p = readParams(params)
+    if (typeof p === 'string') return { ok: false, error: p }
+    const { stream } = (params ?? {}) as { stream?: unknown }
+    try {
+      return { ok: true, ...(await ctx.saveVideo(p.url, stream === true, p.tabId)) }
     } catch (error) {
       return fail(error)
     }

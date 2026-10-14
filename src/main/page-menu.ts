@@ -28,6 +28,9 @@ export interface PageContext {
   /** The media element's source URL, or '' when none. A `blob:` (or empty) video
    * src means a streamed video with no downloadable file — it needs yt-dlp. */
   srcURL: string
+  /** Linux fork: the folder this profile last saved a video into, '' when none.
+   * Set, it adds a one-click "Save Video to "<folder>"" above "Save Video As…". */
+  videoSaveDir?: string
 }
 
 /** One entry of the resolved menu. `command` routes through the registry;
@@ -53,7 +56,7 @@ export type PageMenuItem =
   | { type: 'inspect-element'; label: string }
   // Linux fork: "Save Video As…" (pick a folder) / "Copy Video Address" on a
   // streamed video. Like `download-stream`, the permalink is resolved by the popup.
-  | { type: 'stream-video'; action: 'save-as' | 'copy-link'; label: string }
+  | { type: 'stream-video'; action: 'save-to' | 'save-as' | 'copy-link'; label: string }
 
 /** Decide the menu for a right-click. Always offers navigation (back / forward /
  * reload); adds a link group when on a link, and a clipboard group when in an
@@ -70,7 +73,7 @@ export function buildPageMenu(ctx: PageContext): PageMenuItem[] {
   // path; a streamed video (blob:/MSE) has no file, so it routes to yt-dlp.
   const mediaItem = buildMediaItem(ctx.mediaType, ctx.srcURL)
   if (mediaItem) items.push({ type: 'separator' }, mediaItem)
-  if (ctx.mediaType === 'video') items.push(...buildVideoExtraItems(ctx.srcURL))
+  if (ctx.mediaType === 'video') items.push(...buildVideoExtraItems(ctx.srcURL, ctx.videoSaveDir))
 
   // Chrome-style "Open Image in New Tab": same `new-tab` command as a link.
   if (ctx.mediaType === 'image' && ctx.srcURL) {
@@ -192,18 +195,34 @@ export function buildMediaItem(mediaType: string, srcURL: string): PageMenuItem 
   return null
 }
 
-/** Linux fork: the items under "Download Video" — save into a folder the user
- * picks, and copy the video's address. A streamed video (blob:/empty src) has no
- * file URL: both go through its permalink, resolved in-page by the popup. Pure. */
-export function buildVideoExtraItems(srcURL: string): PageMenuItem[] {
+/** Linux fork: the items under "Download Video" — save into the last folder used
+ * (when there is one; KDE's folder picker ignores the folder Mira asks it to
+ * open on), save into a folder the user picks, and copy the video's address. A
+ * streamed video (blob:/empty src) has no file URL: all go through its
+ * permalink, resolved in-page by the popup. Pure. */
+export function buildVideoExtraItems(srcURL: string, saveDir = ''): PageMenuItem[] {
   const streamed = !srcURL || srcURL.startsWith('blob:')
+  const folder = saveDir.replace(/\/+$/, '').split('/').pop()
+  const saveToLabel = `Save Video to "${folder}"`
   if (streamed) {
     return [
+      ...(folder ? [{ type: 'stream-video', action: 'save-to', label: saveToLabel } as const] : []),
       { type: 'stream-video', action: 'save-as', label: 'Save Video As…' },
       { type: 'stream-video', action: 'copy-link', label: 'Copy Video Address' }
     ]
   }
   return [
+    ...(folder
+      ? [
+          {
+            type: 'command',
+            command: 'save-video',
+            params: { url: srcURL },
+            label: saveToLabel,
+            enabled: true
+          } as const
+        ]
+      : []),
     {
       type: 'command',
       command: 'save-video-as',

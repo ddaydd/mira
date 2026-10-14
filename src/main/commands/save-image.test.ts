@@ -67,3 +67,17 @@ describe('save-video-as', () => {
     })
   })
 })
+
+describe('save-video', () => {
+  it('saves into the remembered folder without a dialog', async () => {
+    const { ctx } = makeContext()
+    const registry = createCommandRegistry()
+    expect(
+      await registry.execute('save-video', { url: 'https://x.test/c.mp4', stream: true }, ctx)
+    ).toEqual({ ok: true, file: '/fake/videos/c.mp4' })
+    expect(await registry.execute('save-video', {}, ctx)).toEqual({
+      ok: false,
+      error: 'missing "url"'
+    })
+  })
+})

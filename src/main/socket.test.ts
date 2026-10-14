@@ -290,6 +290,7 @@ function setup(): {
     saveImageAs: async () => ({ file: null }),
     getImageSaveDir: () => '',
     saveVideoAs: async () => ({ file: null }),
+    saveVideo: async () => ({ file: '' }),
     listChatHistory: () => [],
     getChatConversation: (id: string) => {
       throw new Error(`unknown conversation: ${id}`)
