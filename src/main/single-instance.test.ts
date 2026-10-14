@@ -132,6 +132,28 @@ describe('forwardToRunningInstance', () => {
     expect(received.map((l) => JSON.parse(l).command)).toEqual(['open-url', 'focus-app'])
   })
 
+  it('opens and raises a forced profile instead of the last window', async () => {
+    const path = socketPath()
+    const received: string[] = []
+    await startFakePrimary(path, received)
+
+    expect(
+      await forwardToRunningInstance(path, ['https://example.com'], undefined, true, 'p2')
+    ).toBe(true)
+    expect(received.map((l) => JSON.parse(l))).toEqual([
+      {
+        client: 'mira-second-instance',
+        command: 'open-profile',
+        params: { id: 'p2', raise: true }
+      },
+      {
+        client: 'mira-second-instance',
+        command: 'open-url',
+        params: { url: 'https://example.com' }
+      }
+    ])
+  })
+
   it('times out to false when a connected primary never replies', async () => {
     const path = socketPath()
     if (existsSync(path)) unlinkSync(path)

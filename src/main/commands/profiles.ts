@@ -12,7 +12,9 @@ export interface ProfileContext {
   getTargetProfile: () => ProfileInfo | null
   /** Open the window for an existing profile id, or focus it if already open.
    * Throws if the id is unknown. */
-  openProfile: (id: string) => { id: string; created: boolean }
+  /** `raise` overrides the origin's foreground policy (a desktop launcher
+   * asking for one profile is the user asking for that window). */
+  openProfile: (id: string, raise?: boolean) => { id: string; created: boolean }
   /** Close the open window of a profile without quitting the app or touching the
    * other profiles. `closed` is false when the id was known but not currently
    * open (idempotent). Throws if the id is unknown. */
@@ -39,6 +41,8 @@ export interface ProfileContext {
 
 export interface OpenProfileParams {
   id: string
+  /** Bring the window to the front even from a script (Linux `--profile` relaunch). */
+  raise?: boolean
 }
 
 export interface CloseProfileParams {
@@ -66,12 +70,15 @@ export interface SetProfileColorParams {
 
 export const profileCommands: CommandMap<CommandContext> = {
   'open-profile': (ctx, params) => {
-    const { id } = (params ?? {}) as Partial<OpenProfileParams>
+    const { id, raise } = (params ?? {}) as Partial<OpenProfileParams>
     if (typeof id !== 'string' || id.trim() === '') {
       return { ok: false, error: 'missing "id"' }
     }
+    if (raise !== undefined && typeof raise !== 'boolean') {
+      return { ok: false, error: '"raise" must be a boolean' }
+    }
     try {
-      const { id: opened, created } = ctx.openProfile(id.trim())
+      const { id: opened, created } = ctx.openProfile(id.trim(), raise)
       return { ok: true, id: opened, created }
     } catch (error) {
       return fail(error)

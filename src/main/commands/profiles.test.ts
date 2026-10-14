@@ -22,6 +22,24 @@ describe('open-profile', () => {
     expect(opened).toEqual([work.id])
   })
 
+  it('passes an explicit raise through and rejects a non-boolean one', () => {
+    const { ctx } = makeContext()
+    const raises: Array<boolean | undefined> = []
+    const base = ctx.openProfile
+    ctx.openProfile = (id, raise) => {
+      raises.push(raise)
+      return base(id)
+    }
+    const registry = createCommandRegistry()
+    registry.execute('open-profile', { id: 'default', raise: true }, ctx)
+    registry.execute('open-profile', { id: 'default' }, ctx)
+    expect(raises).toEqual([true, undefined])
+    expect(registry.execute('open-profile', { id: 'default', raise: 'yes' }, ctx)).toEqual({
+      ok: false,
+      error: '"raise" must be a boolean'
+    })
+  })
+
   it('reports created:false when the profile window already exists', () => {
     const { ctx } = makeContext()
     const registry = createCommandRegistry()

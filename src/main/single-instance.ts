@@ -41,6 +41,17 @@ export function raiseRequest(): string {
   return JSON.stringify({ client: 'mira-second-instance', command: 'focus-app' })
 }
 
+/** The socket line that opens (or raises) one profile's window in the running
+ * Mira: a Linux launcher pinned with `--profile <id>` must land on THAT profile,
+ * not on whichever window was last in front. */
+export function profileRequest(id: string): string {
+  return JSON.stringify({
+    client: 'mira-second-instance',
+    command: 'open-profile',
+    params: { id, raise: true }
+  })
+}
+
 /** The socket line that hands one queued url to a running Mira. */
 export function forwardRequest(url: string): string {
   // Named like every socket caller (socket.ts): command.log then tells a link
@@ -59,10 +70,16 @@ export function forwardToRunningInstance(
   socketPath: string,
   urls: string[],
   timeoutMs = 2000,
-  raise = false
+  raise = false,
+  profileId: string | null = null
 ): Promise<boolean> {
-  if (urls.length === 0 && !raise) return Promise.resolve(false)
-  const lines = [...urls.map(forwardRequest), ...(raise ? [raiseRequest()] : [])]
+  if (urls.length === 0 && !raise && !profileId) return Promise.resolve(false)
+  // The profile goes first: open-url then targets the profile just raised.
+  const lines = [
+    ...(profileId ? [profileRequest(profileId)] : []),
+    ...urls.map(forwardRequest),
+    ...(raise && !profileId ? [raiseRequest()] : [])
+  ]
 
   return new Promise((resolve) => {
     const conn = connect(socketPath)

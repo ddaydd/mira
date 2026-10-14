@@ -6719,7 +6719,7 @@ export class ProfileManager {
       // target window — the command may arrive over the socket while a different
       // window is "focused".
       openExternalUrl: (url, profileId) => this.openUrl(url, profileId, raiseAllowed),
-      openProfile: (id) => this.openProfile(id, raiseAllowed),
+      openProfile: (id, raise) => this.openProfile(id, raise ?? raiseAllowed),
       closeProfile: (id) => this.closeProfile(id),
       createProfile: (label) =>
         this.createProfile(label, origin === 'external' ? 'automation' : 'user'),

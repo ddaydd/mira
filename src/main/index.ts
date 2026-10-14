@@ -229,15 +229,18 @@ app.whenReady().then(async () => {
   // On Linux a plain relaunch (the launcher icon clicked again) must not boot a
   // second Mira on the same socket either: it raises the running one instead, as
   // does a forwarded link — nothing else would bring that window to the front.
-  // A forced profile (--profile / MIRA_PROFILE) still boots on its own.
-  const raiseOnHandoff =
-    process.platform === 'linux' && parseProfileArg(process.argv, process.env) === null
+  // A forced profile (--profile / MIRA_PROFILE) opens or raises that profile's
+  // window there instead (a launcher pinned per profile); on macOS it still boots
+  // on its own.
+  const raiseOnHandoff = process.platform === 'linux'
+  const handoffProfile = raiseOnHandoff ? parseProfileArg(process.argv, process.env) : null
   if (pendingUrls.length > 0 || raiseOnHandoff) {
     const forwarded = await forwardToRunningInstance(
       SOCKET_PATH,
       pendingUrls,
       undefined,
-      raiseOnHandoff
+      raiseOnHandoff,
+      handoffProfile
     )
     if (forwarded) {
       pendingUrls.length = 0
