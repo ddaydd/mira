@@ -28,6 +28,10 @@ export interface AppSettings {
   /** Whether the bookmarks bar (a strip of top-level favorites under the
    * toolbar) is shown. Off by default: Mira's own model is the Bookmarks menu. */
   bookmarksBarVisible: boolean
+  /** Linux fork: the bar shown / hidden per profile id (toggle-bookmarks-bar
+   * acts on the window's profile). A profile without an entry uses
+   * bookmarksBarVisible. */
+  bookmarksBarByProfile?: Record<string, boolean>
   /** Whether quitting Mira asks "Quit Mira?" first (quit.ts). On by default; the
    * dialog's "Don't ask again" box turns it off, Settings → General back on. */
   confirmQuit: boolean
@@ -114,6 +118,7 @@ export function normalizeSettings(raw: unknown): AppSettings {
     // keeps the gesture off — off is the safe default.
     magnifierEnabled: v.magnifierEnabled === true,
     bookmarksBarVisible: v.bookmarksBarVisible === true,
+    ...normalizeBookmarksBarByProfile(v.bookmarksBarByProfile),
     // Only an explicit false silences the prompt: asking is the safe default.
     confirmQuit: v.confirmQuit !== false,
     devtoolsInWindow: v.devtoolsInWindow === true
@@ -176,6 +181,35 @@ export function withMagnifierEnabled(settings: AppSettings, enabled: boolean): A
 /** Return settings with the bookmarks bar shown or hidden. */
 export function withBookmarksBarVisible(settings: AppSettings, visible: boolean): AppSettings {
   return { ...settings, bookmarksBarVisible: visible }
+}
+
+/** `{ bookmarksBarByProfile }` when the file has any, else nothing. */
+function normalizeBookmarksBarByProfile(raw: unknown): {
+  bookmarksBarByProfile?: Record<string, boolean>
+} {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {}
+  const out: Record<string, boolean> = {}
+  for (const [id, shown] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof shown === 'boolean') out[id] = shown
+  }
+  return Object.keys(out).length > 0 ? { bookmarksBarByProfile: out } : {}
+}
+
+/** Whether ONE profile shows the bookmarks bar: its own choice, else the shared one. */
+export function bookmarksBarVisibleFor(settings: AppSettings, profileId: string): boolean {
+  return settings.bookmarksBarByProfile?.[profileId] ?? settings.bookmarksBarVisible
+}
+
+/** Return settings with the bookmarks bar shown or hidden for ONE profile. */
+export function withProfileBookmarksBar(
+  settings: AppSettings,
+  profileId: string,
+  visible: boolean
+): AppSettings {
+  return {
+    ...settings,
+    bookmarksBarByProfile: { ...settings.bookmarksBarByProfile, [profileId]: visible }
+  }
 }
 
 /** Return settings with the quit confirmation turned on or off. */

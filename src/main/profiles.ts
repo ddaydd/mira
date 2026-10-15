@@ -302,7 +302,8 @@ import {
   sidebarWidthFor,
   withSkillPaneWidth,
   withMagnifierEnabled,
-  withBookmarksBarVisible,
+  bookmarksBarVisibleFor,
+  withProfileBookmarksBar,
   withConfirmQuit,
   withDevtoolsInWindow
 } from './settings-store'
@@ -3320,7 +3321,7 @@ export class ProfileManager {
     // The bookmarks bar, when shown, adds its strip under the toolbar.
     const topChrome = topChromeHeight(
       this.deps.toolbarHeight,
-      this.appSettings.bookmarksBarVisible,
+      bookmarksBarVisibleFor(this.appSettings, pw.id),
       pw.chromeHidden
     )
     // The status bar sits at the very bottom of the chrome; leave room for it so
@@ -3658,8 +3659,8 @@ export class ProfileManager {
       // Zen mode rides the tabs channel (like panelCollapsed): both are chrome
       // layout bits, so the renderer learns to hide/show the bars for free.
       chromeHidden: pw.chromeHidden,
-      // The bookmarks bar is a chrome layout bit too (app-wide setting).
-      bookmarksBar: this.appSettings.bookmarksBarVisible,
+      // The bookmarks bar is a chrome layout bit too (per profile setting).
+      bookmarksBar: bookmarksBarVisibleFor(this.appSettings, pw.id),
       // Folder metadata rides the same channel so the sidebar groups tabs by
       // folder and reflects collapse/rename without a separate poll.
       folders: pw.folders
@@ -4605,7 +4606,7 @@ export class ProfileManager {
         htmlFullScreen: pw.htmlFullScreen !== null
       },
       sidebar: !pw.panelCollapsed,
-      bookmarksBar: this.appSettings.bookmarksBarVisible,
+      bookmarksBar: bookmarksBarVisibleFor(this.appSettings, pw.id),
       zen: pw.chromeHidden
     }
   }
@@ -5396,15 +5397,20 @@ export class ProfileManager {
     evalInWebContents(wc, js).catch(() => {})
   }
 
-  /** Show / hide the bookmarks bar app-wide (undefined flips): persist, then
-   * re-lay out every window (the web view moves down / up by the strip) and push
-   * the bit to each chrome so it renders / drops the strip. */
-  private setBookmarksBarVisible(visible?: boolean): { visible: boolean } {
-    const next = visible ?? !this.appSettings.bookmarksBarVisible
-    if (next !== this.appSettings.bookmarksBarVisible) {
-      this.appSettings = withBookmarksBarVisible(this.appSettings, next)
+  /** Show / hide the bookmarks bar of `target`'s profile (undefined flips):
+   * persist, then re-lay out that profile's windows (the web view moves down / up
+   * by the strip) and push the bit to their chrome so it renders / drops it. */
+  private setBookmarksBarVisible(
+    target: ProfileWindow | null,
+    visible?: boolean
+  ): { visible: boolean } {
+    if (!target) throw new Error('no target window')
+    const shown = bookmarksBarVisibleFor(this.appSettings, target.id)
+    const next = visible ?? !shown
+    if (next !== shown) {
+      this.appSettings = withProfileBookmarksBar(this.appSettings, target.id, next)
       this.deps.persistSettings(this.appSettings)
-      for (const pw of this.openById.values()) {
+      for (const pw of this.windowsForProfile(target.id)) {
         this.layout(pw)
         this.pushTabs(pw)
       }
@@ -5424,7 +5430,7 @@ export class ProfileManager {
     if (pw.window.isDestroyed()) return
     const node = findBookmarkNode(this.bookmarksFor(pw.id).get(), id)
     if (!node) throw new Error(`unknown bookmark: ${id}`)
-    void this.bookmarkMenuState().then((state) => {
+    void this.bookmarkMenuState(pw).then((state) => {
       if (!pw.window.isDestroyed()) {
         this.popupBookmarkEntries(pw, buildBookmarkMenu(node, state), at)
       }
@@ -5437,18 +5443,20 @@ export class ProfileManager {
     at: { x: number; y: number } | undefined
   ): void {
     if (pw.window.isDestroyed()) return
-    void this.bookmarkMenuState().then((state) => {
+    void this.bookmarkMenuState(pw).then((state) => {
       if (!pw.window.isDestroyed()) this.popupBookmarkEntries(pw, buildBarMenu(state), at)
     })
   }
 
   /** Paste is greyed out unless there is something to paste (clipboard read is
    * async in Electron 44). */
-  private async bookmarkMenuState(): Promise<{ canPaste: boolean; barVisible: boolean }> {
+  private async bookmarkMenuState(
+    pw: ProfileWindow
+  ): Promise<{ canPaste: boolean; barVisible: boolean }> {
     const text = await clipboard.readText().catch(() => '')
     return {
       canPaste: pasteSource(this.bookmarkClip, text) !== null,
-      barVisible: this.appSettings.bookmarksBarVisible
+      barVisible: bookmarksBarVisibleFor(this.appSettings, pw.id)
     }
   }
 
@@ -6147,7 +6155,8 @@ export class ProfileManager {
    * rebuilt on focus change (onChange), so it always mirrors the front window. */
   /** Whether the bookmarks bar is shown (for the View menu's check mark). */
   bookmarksBarVisible(): boolean {
-    return this.appSettings.bookmarksBarVisible
+    const id = this.focusedId() ?? this.lastFocusedProfileId()
+    return id ? bookmarksBarVisibleFor(this.appSettings, id) : this.appSettings.bookmarksBarVisible
   }
 
   /** Whether a user quit asks first (read by the quit prompt in index.ts). */
@@ -6291,6 +6300,13 @@ export class ProfileManager {
       if (pw.state.tabs.some((t) => t.id === tabId)) return this.discardTabIn(pw, tabId)
     }
     throw new Error(`unknown tab: ${tabId}`)
+  }
+
+  /** Linux fork: the profile of the last focused Mira window (the View menu's
+   * check mark when no Mira window has the focus right now). */
+  private lastFocusedProfileId(): string | null {
+    const pw = this.lastFocusedWindowId ? this.openById.get(this.lastFocusedWindowId) : undefined
+    return pw?.id ?? null
   }
 
   private focusedId(): string | null {
@@ -6817,7 +6833,12 @@ export class ProfileManager {
       // sidebarWidth answers for the target window's profile (per-profile widths).
       getSettings: () => ({
         ...this.appSettings,
-        ...(target ? { sidebarWidth: sidebarWidthFor(this.appSettings, target.id) } : {})
+        ...(target
+          ? {
+              sidebarWidth: sidebarWidthFor(this.appSettings, target.id),
+              bookmarksBarVisible: bookmarksBarVisibleFor(this.appSettings, target.id)
+            }
+          : {})
       }),
       setHomeUrl: (url) => {
         this.appSettings = withHomeUrl(this.appSettings, url)
@@ -7802,7 +7823,7 @@ export class ProfileManager {
       listBookmarks: () => ({ tree: bookmarks().get() }),
       openBookmark: (id) => this.openBookmarkIn(target, id),
       ungroupBookmarkFolder: (id) => bookmarks().ungroup(id),
-      setBookmarksBarVisible: (visible) => this.setBookmarksBarVisible(visible),
+      setBookmarksBarVisible: (visible) => this.setBookmarksBarVisible(target, visible),
       bookmarkFavicons: (urls) => {
         const ses = target ? this.sessionFor(target.id) : session.defaultSession
         return this.faviconCache.resolve(urls, async (url) => {
@@ -7821,7 +7842,8 @@ export class ProfileManager {
         if (!findBookmarkNode(tree, id)) throw new Error(`unknown bookmark: ${id}`)
         // Only a top-level item sits on the bar, so only it can be edited there.
         const onBar = tree.some((n) => n.id === id)
-        if (!this.appSettings.bookmarksBarVisible || !onBar || target.window.isDestroyed()) {
+        const shown = bookmarksBarVisibleFor(this.appSettings, target.id)
+        if (!shown || !onBar || target.window.isDestroyed()) {
           return { editing: false }
         }
         target.window.webContents.focus()

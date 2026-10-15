@@ -3,6 +3,8 @@ import {
   defaultSettings,
   defaultLlm,
   normalizeSettings,
+  bookmarksBarVisibleFor,
+  withProfileBookmarksBar,
   normalizeLlm,
   clampWidth,
   withHomeUrl,
@@ -231,5 +233,21 @@ describe('per-profile sidebar width', () => {
     const s = normalizeSettings({ sidebarWidths: { a: 300, b: 'x' } })
     expect(s.sidebarWidths).toEqual({ a: 300 })
     expect(normalizeSettings({}).sidebarWidths).toBeUndefined()
+  })
+})
+
+describe('bookmarks bar per profile', () => {
+  it('falls back to the shared choice, then keeps each profile its own', () => {
+    const base = { ...normalizeSettings({}), bookmarksBarVisible: true }
+    expect(bookmarksBarVisibleFor(base, 'termix')).toBe(true)
+    const next = withProfileBookmarksBar(base, 'termix', false)
+    expect(bookmarksBarVisibleFor(next, 'termix')).toBe(false)
+    expect(bookmarksBarVisibleFor(next, 'default')).toBe(true)
+  })
+
+  it('survives a reload and drops garbage', () => {
+    const raw = { bookmarksBarVisible: true, bookmarksBarByProfile: { termix: false, bad: 'x' } }
+    expect(normalizeSettings(raw).bookmarksBarByProfile).toEqual({ termix: false })
+    expect(normalizeSettings({})).not.toHaveProperty('bookmarksBarByProfile')
   })
 })
