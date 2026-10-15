@@ -30,11 +30,13 @@ import {
   clipboard,
   contentTracing,
   dialog,
+  nativeImage,
   screen,
   session,
   shell,
   type DownloadItem,
   type MenuItemConstructorOptions,
+  type NativeImage,
   type Session,
   type WebContents
 } from 'electron'
@@ -288,6 +290,7 @@ import {
 import { SessionWindowRegistry, firstUserWindow, sessionWindowProfile } from './session-windows'
 import { ClosedWindowStore, reopenWindowFirst, type ClosedWindow } from './closed-windows'
 import { FaviconCache } from './favicon-cache'
+import { MenuFavicons, rasterizeScript } from './menu-favicons'
 import { ImageSaveDirStore } from './image-save-dir'
 import { ChatHistoryStore, conversationText, type ChatSummary } from './chat-history'
 import { inputReadiness, underlaysSurvive, viewShown } from './input-underlay'
@@ -782,6 +785,29 @@ export class ProfileManager {
   /** Linux fork: what the bookmarks-bar menu's last Copy / Cut left (app-wide,
    * in memory, like Chrome's bookmark clipboard). */
   private bookmarkClip: BookmarkClip | null = null
+  /** Linux fork: icons of the bar's native menus (menu-favicons.ts). Lazy. */
+  private menuFaviconsStore: MenuFavicons<NativeImage, ProfileWindow> | null = null
+  private get menuFavicons(): MenuFavicons<NativeImage, ProfileWindow> {
+    return (this.menuFaviconsStore ??= new MenuFavicons({
+      lookup: (pageUrl) => this.faviconCache.lookup(pageUrl),
+      fetchIcon: async (iconUrl, pw) => {
+        const res = await this.sessionFor(pw.id).fetch(iconUrl, {
+          signal: AbortSignal.timeout(5000)
+        })
+        if (!res.ok) return null
+        const bytes = Buffer.from(await res.arrayBuffer())
+        return bytes.length > 300_000 ? null : { bytes, type: res.headers.get('content-type') ?? '' }
+      },
+      rasterize: async (dataUrl, pw) =>
+        pw.window.isDestroyed()
+          ? null
+          : ((await pw.window.webContents.executeJavaScript(rasterizeScript(dataUrl))) as
+              | string
+              | null),
+      toImage: (png) =>
+        nativeImage.createFromBuffer(Buffer.from(png.split(',')[1], 'base64'), { scaleFactor: 2 })
+    }))
+  }
   private get faviconCache(): FaviconCache {
     return (this.faviconCacheStore ??= new FaviconCache(
       join(app.getPath('userData'), 'favicons.json')
@@ -5533,16 +5559,31 @@ export class ProfileManager {
     if (pw.window.isDestroyed()) return
     const items = bookmarksMenuItems(this.bookmarksFor(pw.id).get(), folderId, fromIndex)
     const chrome = pw.window.webContents
-    const toTemplate = (item: BookmarkMenuItem): MenuItemConstructorOptions =>
-      item.type === 'empty'
-        ? { label: '(empty)', enabled: false }
-        : item.type === 'folder'
-          ? { label: item.label, submenu: item.items.map(toTemplate) }
-          : {
-              label: item.label,
-              click: () => this.deps.runCommand?.(chrome, 'navigate', { url: item.url })
-            }
-    Menu.buildFromTemplate(items.map(toTemplate)).popup({ window: pw.window, ...at })
+    // Linux fork: each page with its favicon. The first open of a folder waits
+    // a moment for icons never seen (sub-folders included, up to a cap).
+    const urls: string[] = []
+    const collect = (list: BookmarkMenuItem[]): void => {
+      for (const item of list) {
+        if (urls.length >= 400) return
+        if (item.type === 'url') urls.push(item.url)
+        else if (item.type === 'folder') collect(item.items)
+      }
+    }
+    collect(items)
+    const toTemplate = (item: BookmarkMenuItem): MenuItemConstructorOptions => {
+      if (item.type === 'empty') return { label: '(empty)', enabled: false }
+      if (item.type === 'folder') return { label: item.label, submenu: item.items.map(toTemplate) }
+      const icon = this.menuFavicons.get(item.url)
+      return {
+        label: item.label,
+        ...(icon ? { icon } : {}),
+        click: () => this.deps.runCommand?.(chrome, 'navigate', { url: item.url })
+      }
+    }
+    void this.menuFavicons.load(urls, 700, pw).then(() => {
+      if (pw.window.isDestroyed()) return
+      Menu.buildFromTemplate(items.map(toTemplate)).popup({ window: pw.window, ...at })
+    })
   }
 
   /** Arm / disarm the Cmd+scroll page-zoom gesture app-wide: persist the setting
