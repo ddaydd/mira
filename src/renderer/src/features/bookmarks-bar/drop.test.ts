@@ -19,6 +19,23 @@ describe('dropSlot', () => {
   })
 })
 
+describe('dropSlot on a folder', () => {
+  const withFolder = [
+    { left: 0, right: 100 },
+    { left: 102, right: 202, folder: true }
+  ]
+
+  it('goes into a folder dropped on its middle half', () => {
+    expect(dropSlot(withFolder, 152)).toEqual({ index: 1, markerX: 102, into: 1 })
+    expect(dropSlot(withFolder, 128)).toEqual({ index: 1, markerX: 102, into: 1 })
+  })
+
+  it('still inserts beside it on its outer quarters', () => {
+    expect(dropSlot(withFolder, 110)).toEqual({ index: 1, markerX: 101 })
+    expect(dropSlot(withFolder, 195)).toEqual({ index: 2, markerX: 203 })
+  })
+})
+
 describe('droppedPage', () => {
   const from = (data: Record<string, string>) => (type: string) => data[type] ?? ''
 

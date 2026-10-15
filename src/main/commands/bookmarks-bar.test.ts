@@ -145,6 +145,39 @@ describe('add-bookmark-to-bar', () => {
     expect(top(ctx)).toEqual(['https://in/', 'F'])
   })
 
+  it('drops a page into a folder, moving a favorite already on the bar', () => {
+    const { ctx } = makeContext()
+    const registry = createCommandRegistry()
+    registry.execute('add-bookmark-to-bar', { url: 'https://a/' }, ctx)
+    const folder = ctx.addFolder('F').node
+    ctx.addBookmark('https://in/', 'In', folder.id)
+    expect(
+      registry.execute('add-bookmark-to-bar', { url: 'https://a/', folderId: folder.id }, ctx)
+    ).toMatchObject({ ok: true, created: false, folderId: folder.id })
+    expect(
+      registry.execute('add-bookmark-to-bar', { url: 'https://new/', folderId: folder.id }, ctx)
+    ).toMatchObject({ ok: true, created: true })
+    expect(top(ctx)).toEqual(['F'])
+    const f = ctx.listBookmarks().tree[0]
+    expect(f.kind === 'folder' && f.children.map((n) => (n.kind === 'url' ? n.url : ''))).toEqual([
+      'https://in/',
+      'https://a/',
+      'https://new/'
+    ])
+  })
+
+  it('refuses a folderId that is not a folder', () => {
+    const { ctx } = makeContext()
+    const registry = createCommandRegistry()
+    const a = ctx.addBookmark('https://a/').node
+    expect(
+      registry.execute('add-bookmark-to-bar', { url: 'https://b/', folderId: a.id }, ctx)
+    ).toEqual({ ok: false, error: `not a folder: ${a.id}` })
+    expect(
+      registry.execute('add-bookmark-to-bar', { url: 'https://b/', folderId: '' }, ctx)
+    ).toEqual({ ok: false, error: '"folderId" must be a non-empty string' })
+  })
+
   it('validates its params', () => {
     const { ctx } = makeContext()
     const registry = createCommandRegistry()

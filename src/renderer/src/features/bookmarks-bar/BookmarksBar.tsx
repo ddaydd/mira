@@ -159,7 +159,11 @@ export default function BookmarksBar({ tree }: { tree: BookmarkNode[] }): ReactE
     )
     const x = clientX - strip.getBoundingClientRect().left
     return dropSlot(
-      shown.map((el) => ({ left: el.offsetLeft, right: el.offsetLeft + el.offsetWidth })),
+      shown.map((el) => ({
+        left: el.offsetLeft,
+        right: el.offsetLeft + el.offsetWidth,
+        folder: el.dataset.barFolder === 'true'
+      })),
       x
     )
   }
@@ -169,7 +173,13 @@ export default function BookmarksBar({ tree }: { tree: BookmarkNode[] }): ReactE
     e.preventDefault()
     e.dataTransfer.dropEffect = e.dataTransfer.effectAllowed === 'move' ? 'move' : 'copy'
     const next = slotAt(e.clientX)
-    if (next?.index !== slot?.index || next?.markerX !== slot?.markerX) setSlot(next)
+    if (
+      next?.index !== slot?.index ||
+      next?.markerX !== slot?.markerX ||
+      next?.into !== slot?.into
+    ) {
+      setSlot(next)
+    }
   }
 
   const onDrop = (e: DragEvent<HTMLDivElement>): void => {
@@ -178,7 +188,11 @@ export default function BookmarksBar({ tree }: { tree: BookmarkNode[] }): ReactE
     const page = droppedPage((type) => e.dataTransfer.getData(type))
     if (!page || !target) return
     e.preventDefault()
-    window.mira.command('add-bookmark-to-bar', { ...page, index: target.index })
+    const folder = target.into !== undefined ? tree[target.into] : undefined
+    window.mira.command(
+      'add-bookmark-to-bar',
+      folder ? { ...page, folderId: folder.id } : { ...page, index: target.index }
+    )
   }
 
   return (
@@ -201,7 +215,9 @@ export default function BookmarksBar({ tree }: { tree: BookmarkNode[] }): ReactE
         }}
         onDrop={onDrop}
       >
-        {slot && <span className="bookmarks-bar-drop-marker" style={{ left: slot.markerX }} />}
+        {slot && slot.into === undefined && (
+          <span className="bookmarks-bar-drop-marker" style={{ left: slot.markerX }} />
+        )}
         {tree.map((node, index) =>
           node.id === editingId ? (
             <input
@@ -222,7 +238,8 @@ export default function BookmarksBar({ tree }: { tree: BookmarkNode[] }): ReactE
               key={node.id}
               type="button"
               data-bar-index={index}
-              className="bookmarks-bar-item"
+              data-bar-folder={node.kind === 'folder'}
+              className={`bookmarks-bar-item${slot?.into === index ? ' drop-into' : ''}`}
               title={node.kind === 'url' ? `${node.title}\n${node.url}` : node.title}
               style={
                 hiddenFrom !== null && index >= hiddenFrom ? { visibility: 'hidden' } : undefined

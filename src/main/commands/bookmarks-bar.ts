@@ -153,10 +153,11 @@ export const bookmarksBarCommands: CommandMap<CommandContext> = {
   // being reordered): bookmark it at top-level `index` (default: the end). An
   // already-bookmarked url is not duplicated: that favorite moves there instead.
   'add-bookmark-to-bar': (ctx, params) => {
-    const { url, title, index } = (params ?? {}) as {
+    const { url, title, index, folderId } = (params ?? {}) as {
       url?: unknown
       title?: unknown
       index?: unknown
+      folderId?: unknown
     }
     if (typeof url !== 'string' || url.trim() === '') return { ok: false, error: 'missing "url"' }
     if (title !== undefined && typeof title !== 'string') {
@@ -168,7 +169,19 @@ export const bookmarksBarCommands: CommandMap<CommandContext> = {
     ) {
       return { ok: false, error: '"index" must be a non-negative integer' }
     }
+    if (folderId !== undefined && (typeof folderId !== 'string' || folderId.trim() === '')) {
+      return { ok: false, error: '"folderId" must be a non-empty string' }
+    }
     try {
+      // Dropped on a folder of the bar: at the end of that folder (an already
+      // saved url moves there, as on the bar itself).
+      if (typeof folderId === 'string') {
+        const folder = nodeOf(ctx, folderId.trim())
+        if (folder.kind !== 'folder') throw new Error(`not a folder: ${folder.id}`)
+        const { node, created } = ctx.addBookmark(url.trim(), title)
+        ctx.moveBookmark(node.id, folder.id)
+        return { ok: true, created, node, folderId: folder.id }
+      }
       const { node, created } = ctx.addBookmark(url.trim(), title)
       const tree = ctx.listBookmarks().tree
       const to = index === undefined ? tree.length : index

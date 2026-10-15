@@ -11,9 +11,24 @@ export const MIRA_PAGE_MIME = 'application/x-mira-page'
 export interface DropSlot {
   index: number
   markerX: number
+  /** Set when the page goes INTO the folder at this index, not beside it. */
+  into?: number
 }
 
-export function dropSlot(items: readonly { left: number; right: number }[], x: number): DropSlot {
+/** The middle half of a folder takes the page in; its outer quarters still
+ * insert beside it, so a folder can be passed over to reach its neighbours. */
+export function dropSlot(
+  items: readonly { left: number; right: number; folder?: boolean }[],
+  x: number
+): DropSlot {
+  const over = items.findIndex((it) => it.folder && x >= it.left && x <= it.right)
+  if (over !== -1) {
+    const { left, right } = items[over]
+    const quarter = (right - left) / 4
+    if (x >= left + quarter && x <= right - quarter) {
+      return { index: over, markerX: left, into: over }
+    }
+  }
   const i = items.findIndex((it) => x < (it.left + it.right) / 2)
   if (items.length === 0) return { index: 0, markerX: 0 }
   if (i === -1) return { index: items.length, markerX: items[items.length - 1].right + 1 }
