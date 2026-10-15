@@ -23,6 +23,7 @@ import {
   unwrapFolder,
   findUrl as findBookmarkUrl
 } from './bookmark-store'
+import { type NewBookmarkNode, slotAfter, updateNode, withIds } from './bookmark-edit'
 
 export interface BookmarksControllerDeps {
   /** The persisted tree at startup. */
@@ -89,6 +90,24 @@ export class BookmarksController {
     this.tree = moveNode(this.tree, id, parentId, index)
     this.commit()
     return { moved: true }
+  }
+
+  /** Retitle a node, re-point a favorite (the bar menu's Edit…). Throws on an
+   * unknown id, or a url on a folder. */
+  update(id: string, patch: { title?: string; url?: string }): { node: BookmarkNode } {
+    this.tree = updateNode(this.tree, id, patch)
+    this.commit()
+    return { node: findNode(this.tree, id)! }
+  }
+
+  /** Store a new node (subtree included) right after `afterId`, or at the end of
+   * the top level. Not deduplicated by url: Paste / Add Page… make a copy. */
+  insert(node: NewBookmarkNode, afterId?: string): { node: BookmarkNode } {
+    const stored = withIds(node, randomUUID)
+    const { parentId, index } = slotAfter(this.tree, afterId)
+    this.tree = insertNode(this.tree, parentId, stored, index)
+    this.commit()
+    return { node: stored }
   }
 
   /** Add a whole subtree in one write: a new top-level folder `title` holding

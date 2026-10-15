@@ -184,3 +184,116 @@ describe('bookmark-favicons', () => {
     })
   })
 })
+
+describe('bookmarks-bar editing (Chrome menu)', () => {
+  type Added = { node: { id: string } }
+  const setup = (): {
+    run: (cmd: string, params?: unknown) => Promise<Record<string, unknown>>
+    fake: ReturnType<typeof makeContext>
+    ids: { a: string; f: string }
+  } => {
+    const fake = makeContext()
+    const registry = createCommandRegistry()
+    const run = async (cmd: string, params: unknown = {}): Promise<Record<string, unknown>> =>
+      (await registry.execute(cmd, params, fake.ctx)) as Record<string, unknown>
+    const a = registry.execute(
+      'add-bookmark',
+      { url: 'https://a.test/', title: 'A' },
+      fake.ctx
+    ) as unknown as Added
+    const f = registry.execute('add-folder', { title: 'Dev' }, fake.ctx) as unknown as Added
+    return { run, fake, ids: { a: a.node.id, f: f.node.id } }
+  }
+  const tree = (fake: ReturnType<typeof makeContext>): Array<Record<string, unknown>> =>
+    fake.bookmarks() as unknown as Array<Record<string, unknown>>
+
+  it('update-bookmark retitles and re-points, normalizing the url', async () => {
+    const { run, fake, ids } = setup()
+    expect(await run('update-bookmark', { id: ids.a, title: ' Aa ', url: 'b.test' })).toMatchObject(
+      {
+        ok: true,
+        node: { title: 'Aa', url: 'https://b.test' }
+      }
+    )
+    expect(tree(fake)[0]).toMatchObject({ url: 'https://b.test' })
+    expect(await run('update-bookmark', { id: ids.a })).toMatchObject({ ok: false })
+    expect(await run('update-bookmark', { id: ids.f, url: 'x.test' })).toMatchObject({ ok: false })
+  })
+
+  it('copy then paste duplicates after the anchor; cut then paste moves', async () => {
+    const { run, fake, ids } = setup()
+    expect(await run('copy-bookmark', { id: ids.a })).toEqual({ ok: true, text: 'https://a.test/' })
+    expect(fake.clipboardWrites).toEqual(['https://a.test/'])
+    await run('paste-bookmark', { afterId: ids.f })
+    expect(tree(fake).map((n) => n.title)).toEqual(['A', 'Dev', 'A'])
+
+    await run('cut-bookmark', { id: ids.a })
+    expect(tree(fake).map((n) => n.title)).toEqual(['Dev', 'A'])
+    await run('paste-bookmark', {})
+    expect(tree(fake).map((n) => n.title)).toEqual(['Dev', 'A', 'A'])
+  })
+
+  it('pastes a url copied elsewhere, and says when there is nothing', async () => {
+    const { run, fake } = setup()
+    expect(await run('paste-bookmark')).toEqual({ ok: false, error: 'nothing to paste' })
+    fake.bookmarkEdit.external = 'https://c.test/'
+    expect(await run('paste-bookmark')).toMatchObject({
+      ok: true,
+      node: { kind: 'url', url: 'https://c.test/' }
+    })
+  })
+
+  it('show-bookmark-editor edits, adds a page (prefilled) and a folder', async () => {
+    const { run, fake, ids } = setup()
+    fake.bookmarkEdit.editorAnswer = { title: 'Renamed', url: 'https://z.test/' }
+    expect(await run('show-bookmark-editor', { mode: 'edit', id: ids.a })).toMatchObject({
+      ok: true,
+      node: { title: 'Renamed', url: 'https://z.test/' }
+    })
+    expect(fake.bookmarkEdit.editorRequests[0]).toMatchObject({ mode: 'edit-url', title: 'A' })
+
+    fake.bookmarkEdit.editorAnswer = { title: 'P', url: 'p.test' }
+    await run('show-bookmark-editor', { mode: 'add-page', afterId: ids.a })
+    expect(tree(fake).map((n) => n.title)).toEqual(['Renamed', 'P', 'Dev'])
+
+    fake.bookmarkEdit.editorAnswer = { title: 'New' }
+    await run('show-bookmark-editor', { mode: 'add-folder' })
+    expect(tree(fake)[3]).toMatchObject({ kind: 'folder', title: 'New' })
+
+    fake.bookmarkEdit.editorAnswer = null
+    expect(await run('show-bookmark-editor', { mode: 'add-folder' })).toEqual({
+      ok: true,
+      cancelled: true
+    })
+    expect(await run('show-bookmark-editor', { mode: 'nope' })).toMatchObject({ ok: false })
+  })
+
+  it('opens all of a folder in tabs or in a new window', async () => {
+    const { run, fake, ids } = setup()
+    expect(await run('open-all-bookmarks', { id: ids.f })).toEqual({
+      ok: false,
+      error: 'no bookmarks to open'
+    })
+    await run('add-bookmark', { url: 'https://d.test/', parentId: ids.f })
+    await run('add-bookmark', { url: 'https://e.test/', parentId: ids.f })
+    const opened = await run('open-all-bookmarks', { id: ids.f })
+    expect(opened).toMatchObject({ ok: true })
+    expect((opened.tabIds as string[]).length).toBe(2)
+
+    expect(await run('open-bookmarks-in-new-window', { id: ids.a })).toMatchObject({
+      ok: true,
+      count: 1
+    })
+    await run('open-bookmarks-in-new-window', { id: ids.f })
+    expect(fake.bookmarkEdit.newWindows).toEqual([
+      ['https://a.test/'],
+      ['https://d.test/', 'https://e.test/']
+    ])
+  })
+
+  it('pops the empty-bar menu', async () => {
+    const { run } = setup()
+    expect(await run('show-bookmarks-bar-menu', { x: 3, y: 4 })).toEqual({ ok: true })
+    expect(await run('show-bookmarks-bar-menu', { x: 3 })).toMatchObject({ ok: false })
+  })
+})

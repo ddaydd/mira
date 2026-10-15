@@ -105,6 +105,14 @@ import {
 } from '../bookmark-store'
 import { bookmarksMenuItems } from '../bookmarks-bar'
 import {
+  type BookmarkClip,
+  type NewBookmarkNode,
+  slotAfter,
+  updateNode as updateBookmarkNode,
+  withIds
+} from '../bookmark-edit'
+import type { BookmarkEditorAnswer, BookmarkEditorRequest } from '../bookmark-editor'
+import {
   recordVisit as recordVisitPure,
   recentHistory,
   searchHistory as searchHistoryPure,
@@ -238,6 +246,14 @@ export interface FakeContext {
   skillPaneStates: SkillPaneState[]
   /** Text written to the clipboard via writeClipboard (copy-chat spy). */
   clipboardWrites: string[]
+  /** Bookmarks-bar editing spies / knobs (see makeContext). */
+  bookmarkEdit: {
+    clip: BookmarkClip | null
+    editorAnswer: BookmarkEditorAnswer | null
+    editorRequests: BookmarkEditorRequest[]
+    external: string
+    newWindows: string[][]
+  }
   /** Messages flashed via showToast (show-toast / copy-tab-id spy). */
   toasts: string[]
   /** Live view of the fake app's LLM config (set-llm-config spy). */
@@ -364,6 +380,15 @@ export function makeContext(
   // Folder "Save Image" writes into (save-image commands).
   const imageSaveDir = { value: '/fake/images' }
   const bookmarksBar = { visible: false }
+  // Bookmarks-bar editing: the in-memory clip, the editor's scripted answer,
+  // the text "copied elsewhere" and the windows Open in New Window made.
+  const bookmarkEdit = {
+    clip: null as BookmarkClip | null,
+    editorAnswer: null as BookmarkEditorAnswer | null,
+    editorRequests: [] as BookmarkEditorRequest[],
+    external: '',
+    newWindows: [] as string[][]
+  }
   // Folders whose name field was requested (create-tab-folder with edit: true).
   const folderEdits: string[] = []
   const revealedTabs: string[] = []
@@ -2142,6 +2167,34 @@ export function makeContext(
     showBookmarksMenu: ({ folderId, fromIndex }) => {
       bookmarksMenuItems(state.bookmarks, folderId, fromIndex)
     },
+    showBookmarksBarMenu: () => {},
+    updateBookmark: (id: string, patch: { title?: string; url?: string }) => {
+      state.bookmarks = updateBookmarkNode(state.bookmarks, id, patch)
+      return { node: findNode(state.bookmarks, id)! }
+    },
+    insertBookmark: (node: NewBookmarkNode, afterId?: string) => {
+      const stored = withIds(node, () => `bm-${++state.bookmarkSeq}`)
+      const { parentId, index } = slotAfter(state.bookmarks, afterId)
+      state.bookmarks = insertNode(state.bookmarks, parentId, stored, index)
+      return { node: stored }
+    },
+    bookmarkClip: () => bookmarkEdit.clip,
+    setBookmarkClip: (clip: BookmarkClip) => {
+      bookmarkEdit.clip = clip
+    },
+    readClipboard: async () => clipboardWrites[clipboardWrites.length - 1] ?? bookmarkEdit.external,
+    activePage: () => {
+      const active = state.tabs.tabs.find((t) => t.id === state.tabs.activeId)
+      return active ? { title: active.title, url: active.url } : null
+    },
+    openUrlsInNewWindow: async (urls: string[]) => {
+      bookmarkEdit.newWindows.push(urls)
+      return { windowId: `win-new-${bookmarkEdit.newWindows.length}` }
+    },
+    showBookmarkEditor: async (req: BookmarkEditorRequest) => {
+      bookmarkEdit.editorRequests.push(req)
+      return bookmarkEdit.editorAnswer
+    },
     bookmarkFavicons: async (urls: string[]) =>
       Object.fromEntries(
         urls.map((u) => [
@@ -2361,6 +2414,7 @@ export function makeContext(
     screenshots,
     skillPaneStates,
     clipboardWrites,
+    bookmarkEdit,
     toasts,
     llm: () => state.llm,
     devToolsOpen: () => state.devToolsOpen,

@@ -278,6 +278,15 @@ function setup(): {
     showBookmarkMenu: () => {},
     editBookmark: () => ({ editing: false }),
     bookmarkFavicons: async () => ({}),
+    showBookmarksBarMenu: () => {},
+    updateBookmark: () => ({ node: { id: 'b', kind: 'folder', title: '', children: [] } }),
+    insertBookmark: () => ({ node: { id: 'b', kind: 'folder', title: '', children: [] } }),
+    bookmarkClip: () => null,
+    setBookmarkClip: () => {},
+    readClipboard: async () => '',
+    activePage: () => null,
+    openUrlsInNewWindow: async () => ({ windowId: 'w' }),
+    showBookmarkEditor: async () => null,
     importChromeBookmarks: () => {
       throw new Error('unused')
     },

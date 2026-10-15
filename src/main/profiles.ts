@@ -116,7 +116,9 @@ import { isLiveContents } from './live-contents'
 import { type LlmConfig, type ChatMessage, type PageContext } from './llm'
 import { LlmRunner } from './llm-runner'
 import { type BookmarkTree, importChromeTree, findNode as findBookmarkNode } from './bookmark-store'
-import { buildBookmarkMenu } from './bookmark-menu'
+import { buildBarMenu, buildBookmarkMenu, type BookmarkMenuEntry } from './bookmark-menu'
+import { type BookmarkClip, pasteSource } from './bookmark-edit'
+import { showBookmarkEditor } from './bookmark-editor'
 import type { UiState } from './ui-state'
 import { defaultChromeUserDataDir } from './chrome-import'
 import { bookmarksMenuItems, topChromeHeight, type BookmarkMenuItem } from './bookmarks-bar'
@@ -775,6 +777,9 @@ export class ProfileManager {
   /** Linux fork: the icon each page declares, for the bookmarks bar
    * (favicon-cache.ts). Lazy, like closedWindows. */
   private faviconCacheStore: FaviconCache | null = null
+  /** Linux fork: what the bookmarks-bar menu's last Copy / Cut left (app-wide,
+   * in memory, like Chrome's bookmark clipboard). */
+  private bookmarkClip: BookmarkClip | null = null
   private get faviconCache(): FaviconCache {
     return (this.faviconCacheStore ??= new FaviconCache(
       join(app.getPath('userData'), 'favicons.json')
@@ -5419,30 +5424,92 @@ export class ProfileManager {
     if (pw.window.isDestroyed()) return
     const node = findBookmarkNode(this.bookmarksFor(pw.id).get(), id)
     if (!node) throw new Error(`unknown bookmark: ${id}`)
+    void this.bookmarkMenuState().then((state) => {
+      if (!pw.window.isDestroyed()) {
+        this.popupBookmarkEntries(pw, buildBookmarkMenu(node, state), at)
+      }
+    })
+  }
+
+  /** Right-click on the bar's empty part: Add Page… / Add Folder… / Paste. */
+  private showBookmarksBarMenuIn(
+    pw: ProfileWindow,
+    at: { x: number; y: number } | undefined
+  ): void {
+    if (pw.window.isDestroyed()) return
+    void this.bookmarkMenuState().then((state) => {
+      if (!pw.window.isDestroyed()) this.popupBookmarkEntries(pw, buildBarMenu(state), at)
+    })
+  }
+
+  /** Paste is greyed out unless there is something to paste (clipboard read is
+   * async in Electron 44). */
+  private async bookmarkMenuState(): Promise<{ canPaste: boolean; barVisible: boolean }> {
+    const text = await clipboard.readText().catch(() => '')
+    return {
+      canPaste: pasteSource(this.bookmarkClip, text) !== null,
+      barVisible: this.appSettings.bookmarksBarVisible
+    }
+  }
+
+  private popupBookmarkEntries(
+    pw: ProfileWindow,
+    entries: BookmarkMenuEntry[],
+    at: { x: number; y: number } | undefined
+  ): void {
     const chrome = pw.window.webContents
-    const template = buildBookmarkMenu(node).map((entry): MenuItemConstructorOptions =>
-      entry.type === 'separator'
-        ? { type: 'separator' }
-        : {
-            label: entry.label,
-            click: () => {
-              const run = (): void => this.deps.runCommand?.(chrome, entry.command, entry.params)
-              if (!entry.confirm) return run()
-              dialog
-                .showMessageBox(pw.window, {
-                  type: 'warning',
-                  message: entry.confirm.message,
-                  detail: entry.confirm.detail,
-                  buttons: [entry.confirm.button, 'Cancel'],
-                  defaultId: 1,
-                  cancelId: 1
-                })
-                .then(({ response }) => response === 0 && run())
-                .catch((error) => console.error('[mira] bookmark delete prompt', error))
-            }
-          }
-    )
-    Menu.buildFromTemplate(template).popup({ window: pw.window, ...at })
+    const run = (command: string, params: Record<string, unknown>): void =>
+      void this.deps.runCommand?.(chrome, command, params)
+    const toTemplate = (entry: BookmarkMenuEntry): MenuItemConstructorOptions => {
+      if (entry.type === 'separator') return { type: 'separator' }
+      if (entry.type === 'submenu') {
+        return { label: entry.label, submenu: entry.items.map(toTemplate) }
+      }
+      if (entry.type === 'radio') {
+        return {
+          type: 'radio',
+          label: entry.label,
+          checked: entry.checked,
+          click: () => run(entry.command, entry.params)
+        }
+      }
+      return {
+        label: entry.label,
+        enabled: entry.enabled ?? true,
+        click: () => {
+          if (!entry.confirm) return run(entry.command, entry.params)
+          dialog
+            .showMessageBox(pw.window, {
+              type: 'warning',
+              message: entry.confirm.message,
+              detail: entry.confirm.detail,
+              buttons: [entry.confirm.button, 'Cancel'],
+              defaultId: 1,
+              cancelId: 1
+            })
+            .then(({ response }) => response === 0 && run(entry.command, entry.params))
+            .catch((error) => console.error('[mira] bookmark menu prompt', error))
+        }
+      }
+    }
+    Menu.buildFromTemplate(entries.map(toTemplate)).popup({ window: pw.window, ...at })
+  }
+
+  /** Bookmarks-bar Open in New Window: the first url is opened in `source`, then
+   * torn off into a new window of the same profile, which takes the rest. */
+  private async openUrlsInNewWindowFrom(
+    source: ProfileWindow,
+    urls: string[],
+    raise: boolean
+  ): Promise<{ windowId: string }> {
+    if (source.window.isDestroyed()) throw new Error('no target window')
+    const first = this.newTabIn(source, urls[0], false, undefined, true)
+    const { windowId } = await this.detachTabTo(source, first.id, undefined, raise)
+    const dst = this.openById.get(windowId)
+    if (dst && !dst.window.isDestroyed()) {
+      for (const url of urls.slice(1)) this.newTabIn(dst, url, false, undefined, true)
+    }
+    return { windowId }
   }
 
   /** Pop the native dropdown of a bar folder (or the strip's overflow) of this
@@ -7765,6 +7832,27 @@ export class ProfileManager {
         if (!target) throw new Error('no target window')
         this.showBookmarksMenuIn(target, folderId, fromIndex, at)
       },
+      showBookmarksBarMenu: (at) => {
+        if (!target) throw new Error('no target window')
+        this.showBookmarksBarMenuIn(target, at)
+      },
+      updateBookmark: (id, patch) => bookmarks().update(id, patch),
+      insertBookmark: (node, afterId) => bookmarks().insert(node, afterId),
+      bookmarkClip: () => this.bookmarkClip,
+      setBookmarkClip: (clip) => {
+        this.bookmarkClip = clip
+      },
+      readClipboard: () => clipboard.readText(),
+      activePage: () => {
+        const active = target?.state.tabs.find((t) => t.id === target.state.activeId)
+        return active ? { title: active.title, url: active.url } : null
+      },
+      openUrlsInNewWindow: (urls) => {
+        if (!target) throw new Error('no target window')
+        return this.openUrlsInNewWindowFrom(target, urls, raiseAllowed)
+      },
+      showBookmarkEditor: (req) =>
+        showBookmarkEditor(req, target && !target.window.isDestroyed() ? target.window : null),
       importChromeBookmarks: ({ profileDir, userDataDir, title, to }) => {
         if (to !== undefined && !findById(this.profiles, to)) {
           throw new Error(`unknown profile: ${to}`)

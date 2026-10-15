@@ -4,8 +4,9 @@
 // middle-click: a new tab), a folder pops its NATIVE dropdown via
 // `show-bookmarks-menu` (a DOM menu could not draw over the web view), and so
 // does the » button with the items that did not fit. A right-click pops the
-// item's native menu (`show-bookmark-menu`); its Rename… comes back here as an
-// inline text field (`edit-bookmark` → onEditBookmark → rename-bookmark).
+// item's native menu, Chrome's (`show-bookmark-menu`, bookmark-menu.ts), and the
+// empty part of the bar its own (`show-bookmarks-bar-menu`). The scripted
+// `edit-bookmark` still renames inline here (onEditBookmark → rename-bookmark).
 // A page dropped on the strip (the address-bar site icon, a link, a url item
 // dragged to reorder) is bookmarked at that spot (`add-bookmark-to-bar`).
 
@@ -181,7 +182,15 @@ export default function BookmarksBar({ tree }: { tree: BookmarkNode[] }): ReactE
   }
 
   return (
-    <div className="bookmarks-bar">
+    <div
+      className="bookmarks-bar"
+      onContextMenu={(e) => {
+        // An item's own menu already ran (it prevents the default).
+        if (e.defaultPrevented) return
+        e.preventDefault()
+        window.mira.command('show-bookmarks-bar-menu', { x: e.clientX, y: e.clientY })
+      }}
+    >
       <div
         className="bookmarks-bar-strip"
         ref={stripRef}
