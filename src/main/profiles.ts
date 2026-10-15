@@ -116,6 +116,7 @@ import { isLiveContents } from './live-contents'
 import { type LlmConfig, type ChatMessage, type PageContext } from './llm'
 import { LlmRunner } from './llm-runner'
 import { type BookmarkTree, importChromeTree, findNode as findBookmarkNode } from './bookmark-store'
+import { chromeUrlDates } from './bookmark-manager'
 import { buildBarMenu, buildBookmarkMenu, type BookmarkMenuEntry } from './bookmark-menu'
 import { type BookmarkClip, pasteSource } from './bookmark-edit'
 import { showBookmarkEditor } from './bookmark-editor'
@@ -7886,6 +7887,11 @@ export class ProfileManager {
           title,
           children
         )
+      },
+      fillBookmarkDatesFromChrome: ({ profileDir, userDataDir }) => {
+        const dir = userDataDir ?? defaultChromeUserDataDir(process.platform, homedir())
+        const raw: unknown = JSON.parse(readFileSync(join(dir, profileDir, 'Bookmarks'), 'utf8'))
+        return bookmarks().fillDates(chromeUrlDates(raw))
       },
       // Vault (encrypted profile): the commands take an explicit id, so they don't
       // depend on the target window.

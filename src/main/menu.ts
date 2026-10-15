@@ -465,6 +465,11 @@ export function appMenuTemplate(handlers: AppMenuHandlers): MenuItemConstructorO
           accelerator: 'CmdOrCtrl+D',
           click: () => handlers.addBookmark()
         },
+        {
+          label: 'Manage Bookmarks…',
+          accelerator: 'CmdOrCtrl+Shift+O',
+          click: () => handlers.openSettings('bookmarks')
+        },
         { type: 'separator' },
         ...(() => {
           const tree = handlers.listBookmarks()

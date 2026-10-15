@@ -168,6 +168,13 @@ const STATIC_COMMANDS: ReadonlyArray<Omit<PaletteEntry, 'group'>> = [
     params: { section: 'downloads' },
     keywords: 'files downloaded history'
   },
+  {
+    id: 'cmd:bookmark-manager',
+    title: 'Bookmark Manager',
+    command: 'open-settings',
+    params: { section: 'bookmarks' },
+    keywords: 'favorites search organize'
+  },
   { id: 'cmd:new-profile', title: 'New Profile', command: 'create-profile', keywords: 'account' },
   {
     id: 'cmd:clear-site-data',

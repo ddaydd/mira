@@ -48,6 +48,11 @@ export interface BookmarkContext {
     node: BookmarkNode
     urls: number
   }
+  /** Date the undated favorites of the target window's profile from a Chrome
+   * profile's `Bookmarks` file, matched by url. Throws on an unreadable file. */
+  fillBookmarkDatesFromChrome: (options: { profileDir: string; userDataDir?: string }) => {
+    filled: number
+  }
 }
 
 export interface ImportChromeBookmarksOptions {
@@ -217,6 +222,29 @@ export const bookmarksCommands: CommandMap<CommandContext> = {
         ...(p.to ? { to: p.to.trim() } : {})
       })
       return { ok: true, folderId: node.id, title: node.title, urls }
+    } catch (error) {
+      return fail(error)
+    }
+  },
+
+  // Favorites saved before dates were kept show no "Added" date in Settings →
+  // Bookmarks: recover it from Chrome, where most of them came from.
+  'fill-bookmark-dates-from-chrome': (ctx, params) => {
+    const p = (params ?? {}) as { profileDir?: unknown; userDataDir?: unknown }
+    for (const key of ['profileDir', 'userDataDir'] as const) {
+      const v = p[key]
+      if (v !== undefined && (typeof v !== 'string' || v.trim() === '')) {
+        return { ok: false, error: `"${key}" must be a non-empty string` }
+      }
+    }
+    try {
+      return {
+        ok: true,
+        ...ctx.fillBookmarkDatesFromChrome({
+          profileDir: (p.profileDir as string | undefined)?.trim() ?? 'Default',
+          ...(p.userDataDir ? { userDataDir: (p.userDataDir as string).trim() } : {})
+        })
+      }
     } catch (error) {
       return fail(error)
     }

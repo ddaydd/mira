@@ -24,6 +24,7 @@ import {
   findUrl as findBookmarkUrl
 } from './bookmark-store'
 import { type NewBookmarkNode, slotAfter, updateNode, withIds } from './bookmark-edit'
+import { fillDates } from './bookmark-manager'
 
 export interface BookmarksControllerDeps {
   /** The persisted tree at startup. */
@@ -54,7 +55,7 @@ export class BookmarksController {
   addUrl(url: string, title: string, parentId?: string): { node: BookmarkNode; created: boolean } {
     const existing = findBookmarkUrl(this.tree, url)
     if (existing) return { node: existing, created: false }
-    const node: BookmarkUrl = { id: randomUUID(), kind: 'url', title, url }
+    const node: BookmarkUrl = { id: randomUUID(), kind: 'url', title, url, createdAt: Date.now() }
     this.tree = insertNode(this.tree, parentId ?? null, node)
     this.commit()
     return { node, created: true }
@@ -62,7 +63,13 @@ export class BookmarksController {
 
   /** Add an empty folder under `parentId` (or top level). */
   addFolder(title: string, parentId?: string): { node: BookmarkNode } {
-    const node: BookmarkNode = { id: randomUUID(), kind: 'folder', title, children: [] }
+    const node: BookmarkNode = {
+      id: randomUUID(),
+      kind: 'folder',
+      title,
+      children: [],
+      createdAt: Date.now()
+    }
     this.tree = insertNode(this.tree, parentId ?? null, node)
     this.commit()
     return { node }
@@ -103,7 +110,7 @@ export class BookmarksController {
   /** Store a new node (subtree included) right after `afterId`, or at the end of
    * the top level. Not deduplicated by url: Paste / Add Page… make a copy. */
   insert(node: NewBookmarkNode, afterId?: string): { node: BookmarkNode } {
-    const stored = withIds(node, randomUUID)
+    const stored = withIds(node, randomUUID, Date.now())
     const { parentId, index } = slotAfter(this.tree, afterId)
     this.tree = insertNode(this.tree, parentId, stored, index)
     this.commit()
@@ -114,7 +121,13 @@ export class BookmarksController {
    * `children` (an import). Not deduplicated by url — an import mirrors its
    * source as-is. Returns the folder and how many urls it brought. */
   importFolder(title: string, children: BookmarkTree): { node: BookmarkNode; urls: number } {
-    const node: BookmarkNode = { id: randomUUID(), kind: 'folder', title, children }
+    const node: BookmarkNode = {
+      id: randomUUID(),
+      kind: 'folder',
+      title,
+      children,
+      createdAt: Date.now()
+    }
     this.tree = insertNode(this.tree, null, node)
     this.commit()
     return { node, urls: flatten(children).length }
@@ -136,6 +149,17 @@ export class BookmarksController {
     if (!node) throw new Error(`unknown bookmark: ${id}`)
     if (node.kind !== 'url') throw new Error(`not a url bookmark: ${id}`)
     return node.url
+  }
+
+  /** Give undated nodes a date from `dates` (url → ms), first match by url.
+   * Returns how many got one; writes only when at least one did. */
+  fillDates(dates: Map<string, number>): { filled: number } {
+    const { tree, filled } = fillDates(this.tree, dates)
+    if (filled > 0) {
+      this.tree = tree
+      this.commit()
+    }
+    return { filled }
   }
 
   /** Persist the tree and notify the manager (broadcast + native menu rebuild).

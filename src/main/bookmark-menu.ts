@@ -69,6 +69,14 @@ function barSubmenu(state: BookmarkMenuState): BookmarkMenuEntry {
   }
 }
 
+/** Settings → Bookmarks, Chrome's "Bookmark manager". */
+const managerEntry: BookmarkMenuEntry = {
+  type: 'command',
+  label: 'Bookmark Manager',
+  command: 'open-settings',
+  params: { section: 'bookmarks' }
+}
+
 /** Paste / Add Page… / Add Folder…, inserting after `afterId` (end of the bar
  * without one). */
 function pasteEntry(state: BookmarkMenuState, afterId?: string): BookmarkMenuEntry {
@@ -179,11 +187,12 @@ export function buildBookmarkMenu(
     separator,
     ...addEntries(node.id),
     separator,
-    barSubmenu(state)
+    barSubmenu(state),
+    managerEntry
   ]
 }
 
 /** Right-click on the bar outside any item. */
 export function buildBarMenu(state: BookmarkMenuState): BookmarkMenuEntry[] {
-  return [...addEntries(), separator, pasteEntry(state), separator, barSubmenu(state)]
+  return [...addEntries(), separator, pasteEntry(state), separator, barSubmenu(state), managerEntry]
 }

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { AudioHistorySection } from './features/audio-history/AudioHistorySection'
 import { ChatHistorySection } from './features/chat-history/ChatHistorySection'
 import { DownloadsSection } from './features/downloads/DownloadsSection'
+import { BookmarksSection } from './features/bookmarks-manager/BookmarksSection'
 
 // The Settings surface, rendered inline as a Mira tab (App shows it when the
 // active tab is the internal Settings tab). It never mutates state directly —
@@ -43,6 +44,7 @@ type Section =
   | 'ai'
   | 'chats'
   | 'profiles'
+  | 'bookmarks'
   | 'tabs'
   | 'audio'
   | 'downloads'
@@ -1361,6 +1363,7 @@ const SECTIONS: Array<{ key: Section; label: string }> = [
   { key: 'ai', label: 'AI' },
   { key: 'chats', label: 'AI chats' },
   { key: 'profiles', label: 'Profiles' },
+  { key: 'bookmarks', label: 'Bookmarks' },
   { key: 'tabs', label: 'Tabs' },
   { key: 'audio', label: 'Audio' },
   { key: 'downloads', label: 'Downloads' },
@@ -1402,6 +1405,7 @@ function Settings({ section: requested }: { section?: string }): React.JSX.Eleme
       {section === 'ai' && <AiSection />}
       {section === 'chats' && <ChatHistorySection />}
       {section === 'profiles' && <ProfilesSection />}
+      {section === 'bookmarks' && <BookmarksSection />}
       {section === 'tabs' && <TabsMemorySection />}
       {section === 'audio' && <AudioHistorySection />}
       {section === 'downloads' && <DownloadsSection />}

@@ -8,8 +8,8 @@ import { type BookmarkNode, type BookmarkTree, findNode, flatten } from './bookm
 
 /** A node about to be inserted: ids are assigned by whoever stores it. */
 export type NewBookmarkNode =
-  | { kind: 'url'; title: string; url: string }
-  | { kind: 'folder'; title: string; children: NewBookmarkNode[] }
+  | { kind: 'url'; title: string; url: string; createdAt?: number }
+  | { kind: 'folder'; title: string; children: NewBookmarkNode[]; createdAt?: number }
 
 /** What Copy / Cut left behind. `text` is what went to the system clipboard: a
  * paste only uses the stored node while the clipboard still holds that text, so
@@ -49,22 +49,27 @@ function locate(
   return null
 }
 
-/** A node's content without its ids (a whole subtree for a folder). */
+/** A node's content without its ids (a whole subtree for a folder). The date
+ * travels with it, so a cut + paste keeps when the favorite was added. */
 export function withoutIds(node: BookmarkNode): NewBookmarkNode {
+  const date = node.createdAt !== undefined ? { createdAt: node.createdAt } : {}
   return node.kind === 'url'
-    ? { kind: 'url', title: node.title, url: node.url }
-    : { kind: 'folder', title: node.title, children: node.children.map(withoutIds) }
+    ? { kind: 'url', title: node.title, url: node.url, ...date }
+    : { kind: 'folder', title: node.title, children: node.children.map(withoutIds), ...date }
 }
 
-/** Give a new node (and its subtree) ids. */
-export function withIds(node: NewBookmarkNode, newId: () => string): BookmarkNode {
+/** Give a new node (and its subtree) ids; a node without a date gets `now`. */
+export function withIds(node: NewBookmarkNode, newId: () => string, now?: number): BookmarkNode {
+  const createdAt = node.createdAt ?? now
+  const date = createdAt !== undefined ? { createdAt } : {}
   return node.kind === 'url'
-    ? { id: newId(), kind: 'url', title: node.title, url: node.url }
+    ? { id: newId(), kind: 'url', title: node.title, url: node.url, ...date }
     : {
         id: newId(),
         kind: 'folder',
         title: node.title,
-        children: node.children.map((c) => withIds(c, newId))
+        children: node.children.map((c) => withIds(c, newId, now)),
+        ...date
       }
 }
 

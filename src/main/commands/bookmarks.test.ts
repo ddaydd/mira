@@ -319,3 +319,33 @@ describe('ungroup-bookmark-folder', () => {
     })
   })
 })
+
+describe('fill-bookmark-dates-from-chrome', () => {
+  it('reads the Default Chrome profile unless told otherwise', () => {
+    const { ctx } = makeContext()
+    const registry = createCommandRegistry()
+    expect(registry.execute('fill-bookmark-dates-from-chrome', {}, ctx)).toEqual({
+      ok: true,
+      filled: 3
+    })
+    expect(
+      registry.execute('fill-bookmark-dates-from-chrome', { profileDir: ' Profile 1 ' }, ctx)
+    ).toEqual({ ok: true, filled: 0 })
+  })
+
+  it('rejects an empty profile and reports a failed read', () => {
+    const { ctx } = makeContext()
+    const registry = createCommandRegistry()
+    expect(registry.execute('fill-bookmark-dates-from-chrome', { profileDir: '' }, ctx)).toEqual({
+      ok: false,
+      error: '"profileDir" must be a non-empty string'
+    })
+    ctx.fillBookmarkDatesFromChrome = () => {
+      throw new Error('ENOENT')
+    }
+    expect(registry.execute('fill-bookmark-dates-from-chrome', {}, ctx)).toEqual({
+      ok: false,
+      error: 'ENOENT'
+    })
+  })
+})

@@ -290,6 +290,7 @@ function setup(): {
     importChromeBookmarks: () => {
       throw new Error('unused')
     },
+    fillBookmarkDatesFromChrome: () => ({ filled: 0 }),
     showAudioMenu: () => {},
     showMediaCaptureMenu: () => {},
     resetMediaCapture: () => {},

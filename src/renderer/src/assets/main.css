@@ -6,6 +6,7 @@
 @import './media-capture.css';
 @import './chat-history.css';
 @import './downloads.css';
+@import './bookmarks-manager.css';
 @import './skill-pane.css';
 @import './extension-actions.css';
 @import './find-bar.css';

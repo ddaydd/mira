@@ -15,6 +15,9 @@ export interface BookmarkUrl {
   kind: 'url'
   title: string
   url: string
+  /** When it was added (ms since epoch). Absent on favorites saved before dates
+   * were kept (2026-10-15) — fill-bookmark-dates-from-chrome recovers most. */
+  createdAt?: number
 }
 
 /** A folder holding an ordered list of child nodes (urls and/or sub-folders). */
@@ -23,6 +26,7 @@ export interface BookmarkFolder {
   kind: 'folder'
   title: string
   children: BookmarkNode[]
+  createdAt?: number
 }
 
 export type BookmarkNode = BookmarkUrl | BookmarkFolder
@@ -178,14 +182,24 @@ function normalizeNode(raw: unknown, seen: Set<string>): BookmarkNode | null {
   if (typeof v.id !== 'string' || v.id.trim() === '') return null
   if (seen.has(v.id)) return null
   const title = typeof v.title === 'string' ? v.title : ''
+  const date =
+    typeof v.createdAt === 'number' && Number.isFinite(v.createdAt) && v.createdAt > 0
+      ? { createdAt: v.createdAt }
+      : {}
   // A node is a folder if it says so or simply carries children; else a url.
   if (v.kind === 'folder' || Array.isArray(v.children)) {
     seen.add(v.id)
-    return { id: v.id, kind: 'folder', title, children: normalizeList(v.children, seen) }
+    return {
+      id: v.id,
+      kind: 'folder',
+      title,
+      children: normalizeList(v.children, seen),
+      ...date
+    }
   }
   if (typeof v.url !== 'string' || v.url.trim() === '') return null
   seen.add(v.id)
-  return { id: v.id, kind: 'url', title, url: v.url }
+  return { id: v.id, kind: 'url', title, url: v.url, ...date }
 }
 
 // ---- Atlas import --------------------------------------------------------
@@ -263,6 +277,16 @@ interface ChromeNode {
   name?: unknown
   url?: unknown
   children?: unknown
+  date_added?: unknown
+}
+
+/** Chrome's `date_added` (microseconds since 1601-01-01, as a string) in ms
+ * since the Unix epoch, or undefined when absent / not a valid date. */
+export function chromeDate(raw: unknown): number | undefined {
+  const micros = typeof raw === 'string' || typeof raw === 'number' ? Number(raw) : NaN
+  if (!Number.isFinite(micros) || micros <= 0) return undefined
+  const ms = Math.round(micros / 1000) - 11_644_473_600_000
+  return ms > 0 ? ms : undefined
 }
 
 function importChromeChildren(raw: unknown, newId: () => string): BookmarkTree {
@@ -271,15 +295,18 @@ function importChromeChildren(raw: unknown, newId: () => string): BookmarkTree {
   for (const child of raw as ChromeNode[]) {
     if (!child || typeof child !== 'object') continue
     const title = typeof child.name === 'string' ? child.name : ''
+    const createdAt = chromeDate(child.date_added)
+    const date = createdAt !== undefined ? { createdAt } : {}
     if (child.type === 'url') {
       if (typeof child.url !== 'string' || child.url.trim() === '') continue
-      out.push({ id: newId(), kind: 'url', title, url: child.url })
+      out.push({ id: newId(), kind: 'url', title, url: child.url, ...date })
     } else if (child.type === 'folder') {
       out.push({
         id: newId(),
         kind: 'folder',
         title,
-        children: importChromeChildren(child.children, newId)
+        children: importChromeChildren(child.children, newId),
+        ...date
       })
     }
   }

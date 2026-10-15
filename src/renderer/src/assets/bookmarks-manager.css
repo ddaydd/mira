@@ -1,0 +1,163 @@
+/* Settings → Bookmarks (features/bookmarks-manager): the bookmark manager. */
+.bm-toolbar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.bm-search {
+  flex: 1;
+  min-width: 0;
+}
+
+.bm-select {
+  width: auto;
+  flex-shrink: 0;
+}
+
+.bm-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+  color: var(--ev-c-gray-1);
+  font-size: 12px;
+}
+
+.bm-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px 2px 8px;
+  border-radius: 10px;
+  background: var(--color-background-soft);
+  border: 1px solid var(--ev-c-gray-3);
+  color: var(--color-text);
+}
+
+.bm-chip button {
+  border: none;
+  background: transparent;
+  color: var(--ev-c-gray-1);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.bm-dates {
+  margin-left: auto;
+}
+
+.bm-list {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.bm-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border: 1px solid var(--ev-c-gray-3);
+  border-radius: 8px;
+  background: var(--color-background-soft);
+  font-size: 13px;
+}
+
+.bm-icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  object-fit: contain;
+}
+
+.bm-folder {
+  font-size: 13px;
+  line-height: 16px;
+  text-align: center;
+}
+
+.bm-letter {
+  border-radius: 4px;
+  background: var(--ev-c-gray-3);
+  color: var(--color-text);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+}
+
+.bm-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.bm-title,
+.bm-path {
+  padding: 0;
+  border: none;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bm-title {
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.bm-path {
+  color: inherit;
+  max-width: 100%;
+}
+
+.bm-title:hover,
+.bm-path:hover {
+  text-decoration: underline;
+}
+
+.bm-meta {
+  color: var(--ev-c-gray-1);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bm-dup {
+  color: var(--accent);
+}
+
+.bm-date {
+  flex-shrink: 0;
+  color: var(--ev-c-gray-1);
+  font-size: 11px;
+  min-width: 70px;
+  text-align: right;
+}
+
+.bm-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.bm-remove {
+  font-size: 15px;
+  line-height: 1;
+}
+
+.bm-more {
+  margin-top: 8px;
+}

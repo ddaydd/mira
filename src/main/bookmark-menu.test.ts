@@ -24,7 +24,8 @@ const folder = (n: number): BookmarkNode => ({
 
 describe('buildBookmarkMenu', () => {
   it("lays a favorite's menu out like Chrome's", () => {
-    expect(labels(buildBookmarkMenu(url))).toEqual([
+    const menu = buildBookmarkMenu(url)
+    expect(labels(menu)).toEqual([
       'Open in New Tab',
       'Open in New Window',
       '—',
@@ -39,8 +40,13 @@ describe('buildBookmarkMenu', () => {
       'Add Page…',
       'Add Folder…',
       '—',
-      'Bookmarks Bar'
+      'Bookmarks Bar',
+      'Bookmark Manager'
     ])
+    expect(entry(menu, 'Bookmark Manager')).toMatchObject({
+      command: 'open-settings',
+      params: { section: 'bookmarks' }
+    })
   })
 
   it('wires each entry to its command, inserting after the item', () => {
@@ -133,7 +139,15 @@ describe('buildBookmarkMenu', () => {
 describe('buildBarMenu', () => {
   it('offers add / paste / bar visibility, inserting at the end of the bar', () => {
     const menu = buildBarMenu({ canPaste: true, barVisible: true })
-    expect(labels(menu)).toEqual(['Add Page…', 'Add Folder…', '—', 'Paste', '—', 'Bookmarks Bar'])
+    expect(labels(menu)).toEqual([
+      'Add Page…',
+      'Add Folder…',
+      '—',
+      'Paste',
+      '—',
+      'Bookmarks Bar',
+      'Bookmark Manager'
+    ])
     expect(entry(menu, 'Add Page…')).toMatchObject({ params: { mode: 'add-page' } })
     expect(entry(menu, 'Paste')).toMatchObject({ params: {}, enabled: true })
   })

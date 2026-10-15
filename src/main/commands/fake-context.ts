@@ -1667,6 +1667,7 @@ export function makeContext(
       node: { id: 'imported', kind: 'folder', title, children: [] },
       urls: 0
     }),
+    fillBookmarkDatesFromChrome: ({ profileDir }) => ({ filled: profileDir === 'Default' ? 3 : 0 }),
     // Native audio drop-down (show-audio-menu): a no-op in tests — the item list is
     // covered by audio-menu.test.ts, so the command test only checks dispatch.
     showAudioMenu: () => {},
