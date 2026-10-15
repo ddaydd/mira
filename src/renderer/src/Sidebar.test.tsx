@@ -62,3 +62,15 @@ describe('TabRow close button', () => {
     expect(stopPropagation).toHaveBeenCalledOnce()
   })
 })
+
+describe('TabRow middle click', () => {
+  it('closes the tab on a middle click, not on other aux buttons', () => {
+    const onClose = vi.fn()
+    const row = renderRow({}, onClose)
+    const onAuxClick = (row.props as { onAuxClick: (e: unknown) => void }).onAuxClick
+    onAuxClick({ button: 2, preventDefault: () => {} })
+    expect(onClose).not.toHaveBeenCalled()
+    onAuxClick({ button: 1, preventDefault: () => {} })
+    expect(onClose).toHaveBeenCalledOnce()
+  })
+})

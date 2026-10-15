@@ -299,6 +299,16 @@ export function TabRow({
       // dragover of its own.
       data-tab-id={tab.id}
       onClick={onSelect}
+      // Middle click closes the tab, as in Chrome. The mousedown is swallowed so
+      // Linux does not start autoscroll or a primary-selection paste.
+      onMouseDown={(e) => {
+        if (e.button === 1) e.preventDefault()
+      }}
+      onAuxClick={(e) => {
+        if (e.button !== 1) return
+        e.preventDefault()
+        onClose()
+      }}
       onContextMenu={(e) => {
         e.preventDefault()
         onContextMenu()
