@@ -494,6 +494,7 @@ app.whenReady().then(async () => {
     initialLlm: initialSettings.llm,
     magnifierEnabled: initialSettings.magnifierEnabled,
     bookmarksBarVisible: initialSettings.bookmarksBarVisible,
+    bookmarksBarByProfile: initialSettings.bookmarksBarByProfile,
     confirmQuit: initialSettings.confirmQuit,
     devtoolsInWindow: initialSettings.devtoolsInWindow,
     preloadPath,

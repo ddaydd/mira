@@ -573,6 +573,8 @@ export interface ProfileManagerDeps {
   magnifierEnabled: boolean
   /** Persisted bookmarks-bar visibility (app-wide). */
   bookmarksBarVisible: boolean
+  /** Per-profile bookmarks-bar visibility (settings-store `bookmarksBarByProfile`). */
+  bookmarksBarByProfile?: Record<string, boolean>
   /** Persisted "ask before quitting" (settings-store.ts). */
   confirmQuit: boolean
   /** Persisted "open DevTools in a separate window" (settings-store.ts). */
@@ -906,6 +908,7 @@ export class ProfileManager {
       skillPaneWidth: deps.skillPaneWidth,
       magnifierEnabled: deps.magnifierEnabled,
       bookmarksBarVisible: deps.bookmarksBarVisible,
+      ...(deps.bookmarksBarByProfile ? { bookmarksBarByProfile: deps.bookmarksBarByProfile } : {}),
       confirmQuit: deps.confirmQuit,
       devtoolsInWindow: deps.devtoolsInWindow
     }
