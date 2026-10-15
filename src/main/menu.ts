@@ -470,6 +470,16 @@ export function appMenuTemplate(handlers: AppMenuHandlers): MenuItemConstructorO
           accelerator: 'CmdOrCtrl+Shift+O',
           click: () => handlers.openSettings('bookmarks')
         },
+        {
+          // Same toggle as View → Show Bookmarks Bar; its shortcut is registered
+          // there, only shown here.
+          label: 'Show Bookmarks Bar',
+          type: 'checkbox',
+          checked: handlers.bookmarksBarVisible() === true,
+          accelerator: 'CmdOrCtrl+Shift+B',
+          registerAccelerator: false,
+          click: () => handlers.toggleBookmarksBar()
+        },
         { type: 'separator' },
         ...(() => {
           const tree = handlers.listBookmarks()
