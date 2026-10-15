@@ -450,7 +450,8 @@ export function appMenuTemplate(handlers: AppMenuHandlers): MenuItemConstructorO
           ? profileItems
           : [{ label: 'No profiles', enabled: false } as MenuItemConstructorOptions]),
         { type: 'separator' },
-        { label: 'New Profile', click: () => handlers.newProfile() }
+        { label: 'New Profile', click: () => handlers.newProfile() },
+        { label: 'Manage Profiles…', click: () => handlers.openSettings('profiles') }
       ]
     },
     {
