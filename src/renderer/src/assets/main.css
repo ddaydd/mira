@@ -256,6 +256,14 @@ body {
   opacity: 1;
 }
 
+/* Grip glyph before the label, outside macOS: a drag region gets no hover or
+   cursor change, so the handle has to read as one at rest. */
+.toolbar-drag-grip {
+  font-size: 14px;
+  font-weight: 400;
+  opacity: 0.6;
+}
+
 .toolbar-drag-version {
   font-size: 10px;
   opacity: 0.7;

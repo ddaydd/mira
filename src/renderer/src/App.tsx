@@ -640,6 +640,9 @@ function App(): React.JSX.Element {
             initiates a window drag (window.rs performWindowDragWithEvent). Shows the
             app name + version; a small fixed handle, not a stretching zone. */}
           <div className="toolbar-drag" aria-hidden="true">
+            {window.electron.process.platform !== 'darwin' && (
+              <span className="toolbar-drag-grip">⠿</span>
+            )}
             Mira <span className="toolbar-drag-version">{__APP_VERSION__}</span>
           </div>
           <AppMenuButton />
