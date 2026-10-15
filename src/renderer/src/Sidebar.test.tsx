@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import type { ReactElement } from 'react'
-import { TabRow, type TabInfo } from './Sidebar'
+import { PinnedSquare, TabRow, type TabInfo } from './Sidebar'
 
 const tab: TabInfo = {
   id: 'tab-1',
@@ -68,6 +68,30 @@ describe('TabRow middle click', () => {
     const onClose = vi.fn()
     const row = renderRow({}, onClose)
     const onAuxClick = (row.props as { onAuxClick: (e: unknown) => void }).onAuxClick
+    onAuxClick({ button: 2, preventDefault: () => {} })
+    expect(onClose).not.toHaveBeenCalled()
+    onAuxClick({ button: 1, preventDefault: () => {} })
+    expect(onClose).toHaveBeenCalledOnce()
+  })
+})
+
+describe('PinnedSquare middle click', () => {
+  it('closes the pinned tab on a middle click only', () => {
+    const onClose = vi.fn()
+    const tile = PinnedSquare({
+      tab: { ...tab, pinned: true },
+      active: false,
+      dragging: false,
+      dropPos: null,
+      onSelect: () => {},
+      onClose,
+      onContextMenu: () => {},
+      onDragStart: () => {},
+      onDragOver: () => {},
+      onDrop: () => {},
+      onDragEnd: () => {}
+    })
+    const onAuxClick = (tile.props as { onAuxClick: (e: unknown) => void }).onAuxClick
     onAuxClick({ button: 2, preventDefault: () => {} })
     expect(onClose).not.toHaveBeenCalled()
     onAuxClick({ button: 1, preventDefault: () => {} })

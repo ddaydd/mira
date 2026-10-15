@@ -173,12 +173,13 @@ function Favicon({ tab }: { tab: TabInfo }): React.JSX.Element {
 // block (the grid flows horizontally, so the drop line is left/right, not
 // top/bottom). Right-click opens the same native tab menu as a regular tab (with
 // Unpin Tab inside), like every browser — it no longer unpins directly.
-function PinnedSquare({
+export function PinnedSquare({
   tab,
   active,
   dragging,
   dropPos,
   onSelect,
+  onClose,
   onContextMenu,
   onDragStart,
   onDragOver,
@@ -190,6 +191,8 @@ function PinnedSquare({
   dragging: boolean
   dropPos: DropPos | null
   onSelect: () => void
+  /** Middle click closes the tab (there is no × on a tile). */
+  onClose: () => void
   /** Right-click: ask main to pop the native tab menu for this tab. */
   onContextMenu: () => void
   onDragStart: () => void
@@ -217,6 +220,15 @@ function PinnedSquare({
       // looks at `.tab-row[data-tab-id]`, so a pinned tile never matches it.
       data-tab-id={tab.id}
       onClick={onSelect}
+      // Middle click closes it, like a tab row (see TabRow).
+      onMouseDown={(e) => {
+        if (e.button === 1) e.preventDefault()
+      }}
+      onAuxClick={(e) => {
+        if (e.button !== 1) return
+        e.preventDefault()
+        onClose()
+      }}
       onContextMenu={(e) => {
         e.preventDefault()
         onContextMenu()
@@ -649,6 +661,7 @@ function Sidebar({
               dragging={t.id === draggingId}
               dropPos={dropTarget?.id === t.id && t.id !== draggingId ? dropTarget.pos : null}
               onSelect={() => onSelect(t.id)}
+              onClose={() => onClose(t.id)}
               onContextMenu={() => onContextMenu(t.id)}
               onDragStart={() => beginDrag(t.id)}
               onDragOver={(pos) => setDropOn(t, pos)}
