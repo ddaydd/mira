@@ -344,6 +344,27 @@ const REVEAL_COOKIES_SCRIPT = `(async () => {
   return false
 })()`
 
+/** JS driven inside the DevTools frontend to show its own close button (the ×
+ * after ⚙ and ⋮). The frontend hides it when undocked, and the docked inspector
+ * is opened `mode: 'detach'` (see toggleActiveDevTools), so it never had one.
+ * Its click calls InspectorFrontendHost.closeWindow(): the page's webContents
+ * then emits `devtools-closed`, where openActiveDevTools tears the host down.
+ * Same defensive shape as REVEAL_COOKIES_SCRIPT: a version bump that moves these
+ * internals only loses the button (Ctrl+Shift+I still closes). */
+const SHOW_DEVTOOLS_CLOSE_SCRIPT = `(async () => {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms))
+  for (let i = 0; i < 50; i++) {
+    try {
+      const UI = await import('./ui/legacy/legacy.js')
+      UI.DockController.CloseButtonProvider.instance().item().setVisible(true)
+      return true
+    } catch (e) {
+      await wait(100)
+    }
+  }
+  return false
+})()`
+
 /** Whether closing a window should quit the whole app: true only when it is the
  * app's LAST open window and the close is user-driven. `remainingWindows` is how
  * many stay open AFTER this one goes (0 = it was the last). We skip the quit when
@@ -5095,6 +5116,18 @@ export class ProfileManager {
     const host = new WebContentsView()
     pw.window.contentView.addChildView(host)
     pw.devtools.set(id, host)
+    // Closed from inside the inspector (its × button): free the host view and
+    // give the page its width back. Guarded on identity, because a toggle-close
+    // has already destroyed this host and a reopen may have made a new one.
+    view.webContents.once('devtools-closed', () => {
+      if (pw.window.isDestroyed() || pw.devtools.get(id) !== host) return
+      this.destroyDevToolsView(pw, id)
+      this.layout(pw)
+    })
+    // On every load: the frontend reloads itself (Ctrl+R inside DevTools).
+    host.webContents.on('did-finish-load', () => {
+      host.webContents.executeJavaScript(SHOW_DEVTOOLS_CLOSE_SCRIPT).catch(() => {})
+    })
     view.webContents.setDevToolsWebContents(host.webContents)
     view.webContents.openDevTools({ mode: 'detach' })
     this.layout(pw)
