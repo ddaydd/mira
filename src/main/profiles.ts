@@ -5060,7 +5060,11 @@ export class ProfileManager {
     if (!devtools) return
     pw.devtools.delete(id)
     pw.window.contentView.removeChildView(devtools)
-    devtools.webContents.close()
+    // Closed from the inspector's own × (InspectorFrontendHost.closeWindow),
+    // Electron has already destroyed the host's webContents: the getter is then
+    // undefined, and the throw quit the whole app.
+    const wc = devtools.webContents as WebContents | undefined
+    if (wc && !wc.isDestroyed()) wc.close()
   }
 
   /** Toggle the docked DevTools inspector for the active tab. Opening creates a
