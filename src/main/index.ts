@@ -680,7 +680,9 @@ app.whenReady().then(async () => {
       // close, so closing the last window quits Mira through the confirmation
       // gate — a socket close never does (see TabDetachContext.closeWindow).
       closeWindow: () => runDetached('close-window', {}, profiles.contextForMenu()),
-      newTab: () => runDetached('new-tab', {}, profiles.contextForFocused()),
+      // Menu context: Ctrl+T is a user new tab, so the address bar takes focus
+      // like the "New tab" button (an 'external' origin skips focusChrome).
+      newTab: () => runDetached('new-tab', {}, profiles.contextForMenu()),
       duplicateTab: () => runDetached('duplicate-active-tab', {}, profiles.contextForFocused()),
       // Menu context like closeWindow: Cmd+W on the last tab closes the window
       // (lastTabClosesWindow), which only a user close may do.

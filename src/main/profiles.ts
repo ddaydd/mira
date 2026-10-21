@@ -2503,6 +2503,19 @@ export class ProfileManager {
       view?.webContents.once('focus', () => {
         if (!pw.window.isDestroyed()) pw.window.webContents.focus()
       })
+      // Linux: the page can take focus again once loaded, without a second
+      // 'focus' event reaching us (Mira's home page, measured under X11), so
+      // the typed url went to the page. Check again when the load ends.
+      if (process.platform === 'linux') {
+        view?.webContents.once('did-stop-loading', () => {
+          setTimeout(() => {
+            if (pw.window.isDestroyed() || view.webContents.isDestroyed()) return
+            if (pw.state.activeId === tab.id && view.webContents.isFocused()) {
+              pw.window.webContents.focus()
+            }
+          }, 0)
+        })
+      }
       this.focusAddressBar(pw)
     }
     return tab
