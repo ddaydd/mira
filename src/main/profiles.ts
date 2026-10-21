@@ -5712,7 +5712,8 @@ export class ProfileManager {
         canGoForward: wc.navigationHistory.canGoForward(),
         mediaType,
         srcURL,
-        videoSaveDir: mediaType === 'video' ? this.videoSaveDirs.dirFor(pw.id, '') : ''
+        videoSaveDir: mediaType === 'video' ? this.videoSaveDirs.dirFor(pw.id, '') : '',
+        imageSaveDir: mediaType === 'image' ? this.imageSaveDirs.dirFor(pw.id, '') : ''
       })
       const template: MenuItemConstructorOptions[] = items.map((item) => {
         if (item.type === 'separator') return { type: 'separator' }

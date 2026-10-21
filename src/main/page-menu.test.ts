@@ -227,6 +227,19 @@ describe('buildVideoExtraItems (Linux fork)', () => {
     expect(menu.some((i) => 'label' in i && i.label === 'Save Video to "clips"')).toBe(true)
   })
 
+  it('names the remembered image folder on "Save Image"', () => {
+    const labels = (dir?: string): string[] =>
+      buildPageMenu({
+        ...base,
+        mediaType: 'image',
+        srcURL: 'https://x.com/a.png',
+        imageSaveDir: dir
+      }).map((i) => ('label' in i ? i.label : '-'))
+    expect(labels('/home/me/pics/')).toContain('Save Image to "pics"')
+    expect(labels('')).toContain('Save Image')
+    expect(labels(undefined)).toContain('Save Image')
+  })
+
   it('appears under Download Video in the page menu, and only for video', () => {
     const items = buildPageMenu({ ...base, mediaType: 'video', srcURL: 'blob:x' })
     const labels = items.map((i) => ('label' in i ? i.label : '-'))

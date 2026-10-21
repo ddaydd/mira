@@ -31,6 +31,9 @@ export interface PageContext {
   /** Linux fork: the folder this profile last saved a video into, '' when none.
    * Set, it adds a one-click "Save Video to "<folder>"" above "Save Video As…". */
   videoSaveDir?: string
+  /** Linux fork: the folder this profile last saved an image into, '' when none.
+   * Set, "Save Image" (which already saves there) names it: "Save Image to "<folder>"". */
+  imageSaveDir?: string
 }
 
 /** One entry of the resolved menu. `command` routes through the registry;
@@ -72,6 +75,10 @@ export function buildPageMenu(ctx: PageContext): PageMenuItem[] {
   // real file URL (image/audio, or a plain-file video) downloads via the fetch
   // path; a streamed video (blob:/MSE) has no file, so it routes to yt-dlp.
   const mediaItem = buildMediaItem(ctx.mediaType, ctx.srcURL)
+  const imageFolder = (ctx.imageSaveDir ?? '').replace(/\/+$/, '').split('/').pop()
+  if (mediaItem?.type === 'command' && mediaItem.command === 'save-image' && imageFolder) {
+    mediaItem.label = `Save Image to "${imageFolder}"`
+  }
   if (mediaItem) items.push({ type: 'separator' }, mediaItem)
   if (ctx.mediaType === 'video') items.push(...buildVideoExtraItems(ctx.srcURL, ctx.videoSaveDir))
 
