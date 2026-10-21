@@ -28,12 +28,6 @@ describe('buildHomePage', () => {
     expect(html).toContain('--accent: #3b6fe0;')
   })
 
-  it('offers a Google search box that submits a q= query', () => {
-    const html = buildHomePage(base)
-    expect(html).toContain('action="https://www.google.com/search" method="get"')
-    expect(html).toContain('name="q"')
-  })
-
   it('falls back to the default dark surface with no theme', () => {
     expect(buildHomePage(base)).toContain('--surface: #1b1b1f;')
   })

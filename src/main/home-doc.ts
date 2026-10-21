@@ -120,29 +120,6 @@ export function buildHomePage(stats: HomeStats): string {
   .greeting { color: var(--t2); font-size: 16px; margin: 2px 0 34px; }
   .greeting b { color: var(--t1); font-weight: 600; }
   .clock { font-variant-numeric: tabular-nums; }
-  /* Google search box: a plain GET form, so the results load in this same tab
-   * like a typed query would. The rest of the page is user-select:none; the
-   * field opts back in so its text can be selected and edited. */
-  .search { margin: 0 auto 30px; width: min(620px, 100%); }
-  .search input {
-    width: 100%;
-    padding: 13px 20px;
-    border-radius: 999px;
-    border: 1px solid var(--line);
-    background: var(--card);
-    color: var(--t1);
-    font: inherit;
-    font-size: 16px;
-    outline: none;
-    user-select: text;
-    cursor: text;
-    transition: border-color 0.2s ease, box-shadow 0.2s ease;
-  }
-  .search input::placeholder { color: var(--t3); }
-  .search input:focus {
-    border-color: var(--accent);
-    box-shadow: 0 0 0 3px var(--accent-soft);
-  }
   .cards {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -291,9 +268,6 @@ export function buildHomePage(stats: HomeStats): string {
       <h1>Mira</h1>
     </div>
     <div class="greeting"><span id="hello">Welcome back</span> · <span class="clock" id="clock">--:--</span></div>
-    <form class="search" action="https://www.google.com/search" method="get" role="search">
-      <input type="search" name="q" placeholder="Search Google" aria-label="Search Google" autocomplete="off" spellcheck="false">
-    </form>
     <div class="cards">
       <div class="card">
         <div class="label">Profile</div>
