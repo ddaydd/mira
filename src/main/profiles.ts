@@ -168,6 +168,7 @@ import {
   addTabAfter,
   addTabAfterInactive,
   addTabInactive,
+  addTabAtEndInactive,
   selectTab as selectTabPure,
   stampActiveTab,
   closeTab as closeTabPure,
@@ -2447,13 +2448,20 @@ export class ProfileManager {
     // it is. It still slots under its opener when there is one (Cmd+click on a
     // link); an opener-less background tab lands at the head like any other new
     // tab, just without stealing focus.
+    // Linux fork: a plain new tab goes to the bottom of the list, by the
+    // "New tab" button, instead of the top.
+    const atEnd = process.platform === 'linux'
     pw.state = background
       ? afterId
         ? addTabAfterInactive(pw.state, tab, afterId)
-        : addTabInactive(pw.state, tab)
+        : atEnd
+          ? addTabAtEndInactive(pw.state, tab)
+          : addTabInactive(pw.state, tab)
       : afterId
         ? addTabAfter(pw.state, tab, afterId)
-        : addTabAtHead(pw.state, tab)
+        : atEnd
+          ? addTab(pw.state, tab)
+          : addTabAtHead(pw.state, tab)
     // Only stamp a focus when the new tab actually took it: a background open
     // leaves the previous tab active, and re-stamping THAT tab would claim a focus
     // that never happened (the whole point of the timestamp is to spot stale tabs).

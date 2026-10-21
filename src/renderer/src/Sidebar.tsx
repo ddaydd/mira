@@ -1,5 +1,5 @@
 import type { TabInfo as PreloadTabInfo } from '../../preload/index.d'
-import { useRef, useState, type DragEvent } from 'react'
+import { useEffect, useRef, useState, type DragEvent } from 'react'
 import FolderHeader, { type TabFolder } from './features/tab-folders/FolderHeader'
 import {
   nearestGridTarget,
@@ -440,6 +440,22 @@ function Sidebar({
   // The loose list, for the drop zone under the New tab button (it resolves the
   // pointer against these rows, see listDragOver).
   const looseListRef = useRef<HTMLUListElement>(null)
+
+  // Bring the active row into view when it changes off-screen — a new tab lands
+  // at the bottom of a long list (Linux fork), under the sticky New tab button.
+  useEffect(() => {
+    if (!activeId) return
+    const row = document.querySelector<HTMLElement>(
+      `.sidebar .tab-row[data-tab-id="${CSS.escape(activeId)}"]`
+    )
+    const nav = row?.closest<HTMLElement>('.sidebar')
+    if (!row || !nav) return
+    const r = row.getBoundingClientRect()
+    const n = nav.getBoundingClientRect()
+    const newBtn = nav.querySelector<HTMLElement>('.sidebar-new')?.getBoundingClientRect()
+    const bottom = newBtn && newBtn.top > n.top ? Math.min(n.bottom, newBtn.top) : n.bottom
+    if (r.top < n.top || r.bottom > bottom) row.scrollIntoView({ block: 'center' })
+  }, [activeId, tabs.length])
 
   // Pinned tabs form a contiguous block at the head of the strip (a tab-store
   // invariant). The rest split into folders (grouped by folderId, in the folders'

@@ -4,6 +4,7 @@ import {
   addTab,
   addTabAtHead,
   addTabInactive,
+  addTabAtEndInactive,
   addTabAfter,
   addTabAfterInactive,
   selectTab,
@@ -57,6 +58,20 @@ describe('addTabAtHead', () => {
     const s = addTabAtHead(emptyTabState(), tab('a'))
     expect(s.tabs.map((t) => t.id)).toEqual(['a'])
     expect(s.activeId).toBe('a')
+  })
+})
+
+describe('addTabAtEndInactive', () => {
+  it('appends at the end without changing the active tab', () => {
+    let s = addTab(addTab(emptyTabState(), tab('a')), tab('b'))
+    s = selectTab(s, 'a')
+    s = addTabAtEndInactive(s, tab('c'))
+    expect(s.tabs.map((t) => t.id)).toEqual(['a', 'b', 'c'])
+    expect(s.activeId).toBe('a')
+  })
+
+  it('becomes active on an empty strip', () => {
+    expect(addTabAtEndInactive(emptyTabState(), tab('x')).activeId).toBe('x')
   })
 })
 

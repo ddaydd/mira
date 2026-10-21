@@ -99,6 +99,13 @@ export function addTabInactive(state: TabState, tab: TabMeta): TabState {
   return { tabs, activeId: state.activeId ?? tab.id }
 }
 
+/** Append a tab at the end of the strip WITHOUT focusing it: the background
+ * counterpart of addTab, for the Linux fork where new tabs land at the bottom of
+ * the list (next to the "New tab" button). On an empty strip it becomes active. */
+export function addTabAtEndInactive(state: TabState, tab: TabMeta): TabState {
+  return { tabs: [...state.tabs, tab], activeId: state.activeId ?? tab.id }
+}
+
 /** Insert a tab directly after the tab `afterId` and focus it — the behavior for
  * a link that opens a new tab (window.open / Cmd+click), so the child sits right
  * under its opener instead of at the end of the strip. `tab` is always a regular
