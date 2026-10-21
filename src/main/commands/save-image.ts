@@ -8,8 +8,9 @@ import type { CommandContext } from './context'
 
 /** Save-image capability slice, bound to the target window's profile. */
 export interface SaveImageContext {
-  /** Save the image into the profile's folder under a free name; the saved path. */
-  saveImage: (url: string, tabId?: string) => Promise<{ file: string }>
+  /** Save the image into the profile's folder under a free name; the saved path.
+   * Linux fork: a name already taken asks Replace / Keep Both / Cancel (null). */
+  saveImage: (url: string, tabId?: string) => Promise<{ file: string | null }>
   /** Ask where to save it (OS dialog on the profile's folder); null when cancelled. */
   saveImageAs: (url: string, tabId?: string) => Promise<{ file: string | null }>
   /** The folder the target profile saves images into. */
@@ -20,7 +21,7 @@ export interface SaveImageContext {
   saveVideoAs: (url: string, stream: boolean, tabId?: string) => Promise<{ file: string | null }>
   /** Linux fork: save the video straight into the profile's last video folder
    * (Downloads when none), no dialog. */
-  saveVideo: (url: string, stream: boolean, tabId?: string) => Promise<{ file: string }>
+  saveVideo: (url: string, stream: boolean, tabId?: string) => Promise<{ file: string | null }>
 }
 
 function readParams(params: unknown): { url: string; tabId?: string } | string {
@@ -39,7 +40,8 @@ export const saveImageCommands: CommandMap<CommandContext> = {
     const p = readParams(params)
     if (typeof p === 'string') return { ok: false, error: p }
     try {
-      return { ok: true, ...(await ctx.saveImage(p.url, p.tabId)) }
+      const { file } = await ctx.saveImage(p.url, p.tabId)
+      return file ? { ok: true, file } : { ok: true, cancelled: true }
     } catch (error) {
       return fail(error)
     }
@@ -76,7 +78,8 @@ export const saveImageCommands: CommandMap<CommandContext> = {
     if (typeof p === 'string') return { ok: false, error: p }
     const { stream } = (params ?? {}) as { stream?: unknown }
     try {
-      return { ok: true, ...(await ctx.saveVideo(p.url, stream === true, p.tabId)) }
+      const { file } = await ctx.saveVideo(p.url, stream === true, p.tabId)
+      return file ? { ok: true, file } : { ok: true, cancelled: true }
     } catch (error) {
       return fail(error)
     }

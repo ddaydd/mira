@@ -81,7 +81,14 @@ import { PageConsoleStore, attachedSessionId, draftFromCdpMessage } from './page
 import { isAbortedLoad, isExpectedExit, processGoneLine, subframeFailureLine } from './frame-trace'
 import { MediaBuffer, captureStats, fileNameFor, mergeMedia } from './media-capture'
 import { MEDIA_COLLECT_SOURCE, nearestVideoPermalinkSource, parseDomMedia } from './media-collect'
-import { leftoverParts, progressBytes, runYtdlpTracked } from './ytdlp-progress'
+import {
+  leftoverParts,
+  progressBytes,
+  runYtdlpTracked,
+  type YtdlpProgress,
+  type YtdlpSaveOptions
+} from './ytdlp-progress'
+import { saveConflictChoice, saveConflictDialog, ytdlpTemplateFor } from './save-conflict'
 import { audioAnalysisSource, type AudioAnalysis } from './audio-analysis'
 import { ytdlpDownload } from './ytdlp'
 import {
@@ -4916,6 +4923,47 @@ export class ProfileManager {
     return join(dir, name)
   }
 
+  /** Linux fork: the name a one-click save writes `name` under in `dir` — itself
+   * when free; when taken, the user picks (save-conflict.ts). null = cancelled.
+   * macOS keeps the silent " (1)" copy. */
+  private async saveNameIn(pw: ProfileWindow, dir: string, name: string): Promise<string | null> {
+    if (process.platform === 'darwin' || !existsSync(join(dir, name))) {
+      return uniqueFileName(name, dir, new Set())
+    }
+    return this.askSaveConflict(pw, dir, name)
+  }
+
+  /** Linux fork: Replace / Keep Both / Cancel for `name`, already in `dir`. The
+   * name to save under (`name` itself to replace), null when cancelled. */
+  private async askSaveConflict(
+    pw: ProfileWindow | null,
+    dir: string,
+    name: string
+  ): Promise<string | null> {
+    const alt = uniqueFileName(name, dir, new Set())
+    const options = saveConflictDialog(name, dir, alt)
+    const { response } =
+      pw && !pw.window.isDestroyed()
+        ? await dialog.showMessageBox(pw.window, options)
+        : await dialog.showMessageBox(options)
+    const choice = saveConflictChoice(response)
+    return choice === 'replace' ? name : choice === 'keep-both' ? alt : null
+  }
+
+  /** Linux fork: how to re-run a yt-dlp download whose `file` is already there —
+   * over it, or under the Keep Both name; null when cancelled. */
+  private async ytdlpSaveAfterConflict(
+    profileId: string,
+    file: string
+  ): Promise<YtdlpSaveOptions | null> {
+    const dir = dirname(file)
+    const name = await this.askSaveConflict(this.aWindowForProfile(profileId), dir, basename(file))
+    if (!name) return null
+    return name === basename(file)
+      ? { forceOverwrites: true }
+      : { template: ytdlpTemplateFor(join(dir, name)) }
+  }
+
   /** The bytes + mime type behind a media URL: decoded from a data: URL, fetched
    * inside the page for a blob: URL, or with the tab's session (its cookies). */
   private async fetchMediaUrl(
@@ -5011,26 +5059,35 @@ export class ProfileManager {
     })
     this.broadcastDownloadsChanged()
     let lastPush = 0
-    const res = await runYtdlpTracked(
-      pageUrl,
-      dir,
-      process.env,
-      (p) => {
-        const { received, total } = progressBytes(p)
-        const name = p.file ? basename(p.file) : p.title || pageUrl
-        this.downloadTracker.update(
-          id,
-          { filename: name, receivedBytes: received, totalBytes: total },
-          Date.now()
-        )
-        // Progress lines come several times a second: refresh the chrome 4×/s.
-        if (Date.now() - lastPush > 250) {
-          lastPush = Date.now()
-          this.broadcastDownloadsChanged()
-        }
-      },
-      abort.signal
-    )
+    const onProgress = (p: YtdlpProgress): void => {
+      const { received, total } = progressBytes(p)
+      const name = p.file ? basename(p.file) : p.title || pageUrl
+      this.downloadTracker.update(
+        id,
+        { filename: name, receivedBytes: received, totalBytes: total },
+        Date.now()
+      )
+      // Progress lines come several times a second: refresh the chrome 4×/s.
+      if (Date.now() - lastPush > 250) {
+        lastPush = Date.now()
+        this.broadcastDownloadsChanged()
+      }
+    }
+    let res = await runYtdlpTracked(pageUrl, dir, process.env, onProgress, abort.signal, {
+      stopIfExists: true
+    })
+    // Already in the folder: yt-dlp would skip it and report success — ask first.
+    if (res.existing) {
+      const save = await this.ytdlpSaveAfterConflict(profileId, res.existing)
+      if (!save) {
+        // Nothing was downloaded: the row goes, like a dialog cancelled.
+        this.videoDownloads.delete(id)
+        this.downloadTracker.remove(id)
+        this.broadcastDownloadsChanged()
+        return { saved: false, error: 'cancelled' }
+      }
+      res = await runYtdlpTracked(pageUrl, dir, process.env, onProgress, abort.signal, save)
+    }
     this.videoDownloads.delete(id)
     // Like Chrome: a stopped download leaves no partial files behind.
     if (!res.saved && res.plannedFile) {
@@ -5936,15 +5993,31 @@ export class ProfileManager {
     stream: boolean,
     dir: string,
     tabId?: string
-  ): Promise<{ file: string }> {
+  ): Promise<{ file: string | null }> {
     if (stream) {
       const res = await this.downloadVideoUrl(url, dir, target.id)
+      if (res.error === 'cancelled') return { file: null }
       if (!res.saved) throw new Error(res.error ?? 'download failed')
       return { file: join(dir, res.file ?? '') }
     }
     const { wc } = this.resolveMediaTab(target, tabId)
-    const file = await this.saveMediaUrl(wc, url, dir, new Set())
-    if (!target.window.isDestroyed()) void showToast(target, `Saved ${basename(file)}`)
+    return this.saveMediaAsked(target, wc, url, dir)
+  }
+
+  /** Linux fork: a one-click media save that asks before touching a file already
+   * in `dir` (saveNameIn); `file` null when the user cancelled. */
+  private async saveMediaAsked(
+    target: ProfileWindow,
+    wc: WebContents,
+    url: string,
+    dir: string
+  ): Promise<{ file: string | null }> {
+    const { bytes, mime } = await this.fetchMediaUrl(wc, url)
+    const name = await this.saveNameIn(target, dir, fileNameFor(url, mime))
+    if (!name) return { file: null }
+    const file = join(dir, name)
+    await writeFile(file, bytes)
+    if (!target.window.isDestroyed()) void showToast(target, `Saved ${name}`)
     return { file }
   }
 
@@ -7236,9 +7309,7 @@ export class ProfileManager {
         if (!target) throw new Error('no target window')
         const { wc } = this.resolveMediaTab(target, tabId)
         const dir = this.imageSaveDirs.dirFor(target.id, app.getPath('downloads'))
-        const file = await this.saveMediaUrl(wc, url, dir, new Set())
-        if (!target.window.isDestroyed()) void showToast(target, `Saved ${basename(file)}`)
-        return { file }
+        return this.saveMediaAsked(target, wc, url, dir)
       },
       saveImageAs: async (url, tabId) => {
         if (!target) throw new Error('no target window')

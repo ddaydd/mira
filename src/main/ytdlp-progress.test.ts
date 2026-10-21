@@ -28,6 +28,12 @@ describe('ytdlpTrackedArgs', () => {
     expect(args).toContain('before_dl:MIRA-TITLE %(title)s')
     expect(args.filter((a) => a === 'https://youtu.be/x')).toHaveLength(1)
   })
+  it('re-runs after a name conflict: over the file, or under another name', () => {
+    expect(ytdlpTrackedArgs('u', '/dl', { forceOverwrites: true })).toContain('--force-overwrites')
+    const args = ytdlpTrackedArgs('u', '/dl', { template: '/dl/a (1).%(ext)s' })
+    expect(args[args.indexOf('-o') + 1]).toBe('/dl/a (1).%(ext)s')
+    expect(args).not.toContain('--force-overwrites')
+  })
 })
 
 describe('feedLine', () => {

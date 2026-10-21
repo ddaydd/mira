@@ -10,6 +10,7 @@
 // whole. The line parsing is pure and tested in ytdlp-progress.test.ts.
 
 import { spawn } from 'child_process'
+import { existsSync } from 'fs'
 import { augmentedPath, ytdlpArgs } from './ytdlp'
 
 export interface YtdlpProgress {
@@ -69,12 +70,25 @@ export function parseSize(text: string): number {
   return unit && Number.isFinite(n) ? Math.round(n * unit) : 0
 }
 
+/** How a re-run after a name conflict saves: over the old file, or under
+ * another output template (save-conflict.ts). */
+export interface YtdlpSaveOptions {
+  forceOverwrites?: boolean
+  template?: string
+}
+
 /** The extra flags on top of ytdlpArgs: progress back on, and what we need to
  * know before the download starts. Pure. */
-export function ytdlpTrackedArgs(url: string, outputDir: string): string[] {
+export function ytdlpTrackedArgs(
+  url: string,
+  outputDir: string,
+  save: YtdlpSaveOptions = {}
+): string[] {
   const base = ytdlpArgs(url, outputDir)
+  if (save.template) base[base.indexOf('-o') + 1] = save.template
   return [
     ...base.slice(0, -1),
+    ...(save.forceOverwrites ? ['--force-overwrites'] : []),
     '--progress',
     '--print',
     'before_dl:MIRA-TITLE %(title)s',
@@ -151,16 +165,22 @@ export interface YtdlpTrackedResult {
   error?: string
   /** The announced destination, even on failure (to clean its parts up). */
   plannedFile?: string
+  /** With `stopIfExists`: the announced destination was already on disk, so
+   * yt-dlp was stopped before downloading anything. */
+  existing?: string
 }
 
 /** Run yt-dlp on `url` into `outputDir`, calling `onChange` as the state moves.
- * Aborting `signal` kills yt-dlp (result `cancelled`). Never rejects. */
+ * Aborting `signal` kills yt-dlp (result `cancelled`). `stopIfExists` stops it
+ * as soon as the destination it announces is already there (result `existing`;
+ * left alone, yt-dlp skips it and reports success). Never rejects. */
 export function runYtdlpTracked(
   url: string,
   outputDir: string,
   env: NodeJS.ProcessEnv,
   onChange: (p: YtdlpProgress) => void,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  options: YtdlpSaveOptions & { stopIfExists?: boolean } = {}
 ): Promise<YtdlpTrackedResult> {
   return new Promise((resolve) => {
     let state = initialProgress()
@@ -170,7 +190,7 @@ export function runYtdlpTracked(
       settled = true
       resolve(r)
     }
-    const child = spawn('yt-dlp', ytdlpTrackedArgs(url, outputDir), {
+    const child = spawn('yt-dlp', ytdlpTrackedArgs(url, outputDir, options), {
       env: { ...env, PATH: augmentedPath(env.PATH, env.HOME) },
       signal
     })
@@ -181,6 +201,16 @@ export function runYtdlpTracked(
         rest = lines.pop() ?? ''
         const before = state
         for (const line of lines) state = feedLine(state, line)
+        if (
+          options.stopIfExists &&
+          state.file &&
+          state.file !== before.file &&
+          existsSync(state.file)
+        ) {
+          done({ saved: false, cancelled: false, existing: state.file })
+          child.kill()
+          return
+        }
         if (state !== before) onChange(state)
       }
     }
