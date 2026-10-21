@@ -2446,6 +2446,11 @@ export class ProfileManager {
     const prevActiveId = pw.state.activeId
     const now = Date.now()
     const tab: TabMeta = { id: randomUUID(), title: '', url, favicon: null, openedAt: now }
+    // Linux fork: a lazy tab never loads until clicked, so it would show a letter
+    // badge; give it the icon this site last showed (favicon-cache.ts).
+    if (process.platform === 'linux' && background && lazy && !post) {
+      tab.favicon = this.faviconCache.lookup(url)
+    }
     // A tab opened from a link (afterId set) slots in right under its opener; a
     // plain new tab (Cmd+T, socket) lands at the head of the regular zone, so the
     // newest tab sits at the top of the list. When the opener is pinned, addTabAfter
