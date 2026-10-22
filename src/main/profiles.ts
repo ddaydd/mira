@@ -298,6 +298,7 @@ import {
 import { SessionWindowRegistry, firstUserWindow, sessionWindowProfile } from './session-windows'
 import { ClosedWindowStore, reopenWindowFirst, type ClosedWindow } from './closed-windows'
 import { FaviconCache } from './favicon-cache'
+import { firstWorkingIcon, isIconResponse } from './favicon-pick'
 import { MenuFavicons, rasterizeScript } from './menu-favicons'
 import { ImageSaveDirStore } from './image-save-dir'
 import { ChatHistoryStore, conversationText, type ChatSummary } from './chat-history'
@@ -813,6 +814,8 @@ export class ProfileManager {
   /** Linux fork: the icon each page declares, for the bookmarks bar
    * (favicon-cache.ts). Lazy, like closedWindows. */
   private faviconCacheStore: FaviconCache | null = null
+  /** Linux fork: "is this icon url an image?", per url, for this run (favicon-pick.ts). */
+  private readonly iconProbes = new Map<string, Promise<boolean>>()
   /** Linux fork: what the bookmarks-bar menu's last Copy / Cut left (app-wide,
    * in memory, like Chrome's bookmark clipboard). */
   private bookmarkClip: BookmarkClip | null = null
@@ -3239,9 +3242,31 @@ export class ProfileManager {
     // the commit — so the freshest 500 ms window must start here. did-navigate is
     // always a cross-document main-frame commit.
     wc.on('did-navigate', () => armIfNeeded({ isMainFrame: true, isSameDocument: false }))
+    let faviconEvent = 0
     wc.on('page-favicon-updated', (_e, favicons) => {
       patch({ favicon: favicons?.[0] ?? null })
-      this.faviconCache.note(wc.getURL(), favicons?.[0])
+      if (process.platform !== 'linux' || !favicons?.length) {
+        this.faviconCache.note(wc.getURL(), favicons?.[0])
+        return
+      }
+      // Linux fork: fall back to the next declared icon when the first is not an
+      // image (favicon-pick.ts). Only the latest event of this tab may patch.
+      const event = ++faviconEvent
+      const pageUrl = wc.getURL()
+      if (this.iconProbes.size > 2000) this.iconProbes.clear()
+      void firstWorkingIcon(
+        favicons,
+        async (url) => {
+          const res = await wc.session.fetch(url, { signal: AbortSignal.timeout(6000) })
+          void res.body?.cancel()
+          return isIconResponse(res.ok, res.headers.get('content-type'))
+        },
+        this.iconProbes
+      ).then((icon) => {
+        if (event !== faviconEvent || wc.isDestroyed() || wc.getURL() !== pageUrl) return
+        if (icon && icon !== favicons[0]) patch({ favicon: icon })
+        this.faviconCache.note(pageUrl, icon ?? favicons[0])
+      })
     })
     // A tab starting or stopping sound: refresh the strip so the sidebar speaker
     // icon and the toolbar audio button track it. audible is not stored on the tab
