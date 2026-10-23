@@ -145,6 +145,11 @@ describe('clickTargetScript', () => {
     expect(js).toContain('scrollIntoView')
     expect(js).toContain('const nth = 2')
   })
+
+  it("scrolls instantly, so a page's smooth scroll-behavior cannot outrun the measure", () => {
+    const js = clickTargetScript({ kind: 'selector', value: '.go' }, { nth: 1, scroll: true })
+    expect(js).toContain("behavior: 'instant'")
+  })
 })
 
 describe('interpretClickTarget', () => {

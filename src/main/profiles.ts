@@ -7558,11 +7558,13 @@ export class ProfileManager {
             clickTargetScript(click.target, { nth: click.nth, scroll: click.scroll })
           )
           const resolved = interpretClickTarget(raw)
-          if ('error' in resolved) throw new Error(resolved.error)
-          point = resolved
-          // scrollIntoView is animated on many sites (`scroll-behavior: smooth`),
-          // so the rectangle read above is where the element was ON ITS WAY. Give
-          // the scroll a beat and re-read before clicking.
+          // With scroll, a first miss is not final: a site that animates its own
+          // scrolling (JS smooth-scroll libraries) moves the element after the
+          // read above. The re-read below decides.
+          if ('error' in resolved && !click.scroll) throw new Error(resolved.error)
+          if (!('error' in resolved)) point = resolved
+          // The rectangle read above may be where the element was ON ITS WAY:
+          // give the scroll a beat and re-read before clicking.
           if (click.scroll) {
             await new Promise((r) => setTimeout(r, 250))
             const again = interpretClickTarget(

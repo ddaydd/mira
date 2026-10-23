@@ -185,7 +185,9 @@ export function clickTargetScript(
     return { ok: false, reason: 'asked for match ' + nth + ' of ' + visible.length }
   }
   const el = visible[nth - 1]
-  if (scroll) el.scrollIntoView({ block: 'center', inline: 'center' })
+  // behavior 'instant' overrides a page's \`scroll-behavior: smooth\`: otherwise
+  // the rectangle below is read at the start of the animation, still off-screen.
+  if (scroll) el.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' })
   const r = el.getBoundingClientRect()
   const x = r.left + r.width / 2
   const y = r.top + r.height / 2
