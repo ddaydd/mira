@@ -223,6 +223,7 @@ import {
   type MediaCaptureInfo
 } from './media-capture-state'
 import { AgentActivity, tabsTouchedBy } from './agent-activity'
+import { AUDIBLE_HOLD_MS, AudibleHold } from './audible-hold'
 import { buildFolderMenu, type FolderMenuItem } from './folder-menu'
 import {
   addFolder as addFolderPure,
@@ -803,6 +804,8 @@ export class ProfileManager {
    * and the timer that clears it once the agent goes quiet. */
   private readonly agentActivity = new AgentActivity()
   private agentActivityTimer: NodeJS.Timeout | null = null
+  /** Keeps the speaker icon on through a speaker's pauses (audible-hold.ts). */
+  private readonly audibleHold = new AudibleHold()
   /** Recently closed user windows, persisted (closed-windows.ts). Lazy: userData
    * is only known once the app is ready. */
   private closedWindowStore: ClosedWindowStore | null = null
@@ -3277,9 +3280,13 @@ export class ProfileManager {
     // clock, so this never bumps updatedAt (sound is not a page change).
     wc.on('audio-state-changed', () => {
       const pw = owner()
+      const audible = wc.isCurrentlyAudible()
+      this.audibleHold.note(tabId, audible, Date.now())
       pw.state = updateTab(pw.state, tabId, { lastAudibleAt: Date.now() })
       this.saveSession(pw)
       this.schedulePush(pw)
+      // Re-push once the hold is over, so the icon goes away if the tab stays silent.
+      if (!audible) setTimeout(() => this.schedulePush(owner()), AUDIBLE_HOLD_MS + 50)
     })
     // Main-frame load start/stop drives the toolbar reload spinner (TabInfo.loading,
     // read live in tabInfos). Push immediately (not debounced) so the spinner
@@ -3634,6 +3641,12 @@ export class ProfileManager {
     return isLiveContents(wc) ? wc : null
   }
 
+  /** Audible for the UI: sounding now or within the hold after it stopped. */
+  private tabAudible(pw: ProfileWindow, tabId: string): boolean {
+    const live = this.liveContents(pw, tabId)?.isCurrentlyAudible() === true
+    return this.audibleHold.isAudible(tabId, live, Date.now())
+  }
+
   private tabInfos(pw: ProfileWindow): TabInfo[] {
     return pw.state.tabs.map((t) => ({
       ...t,
@@ -3652,7 +3665,7 @@ export class ProfileManager {
       // Live audio state read straight from the native view (like `loaded` from
       // pw.views): true while the page emits sound. An asleep tab has no view, so
       // it is never audible. Refreshed by the audio-state-changed push (wireView).
-      audible: this.liveContents(pw, t.id)?.isCurrentlyAudible() === true,
+      audible: this.tabAudible(pw, t.id),
       // Live loading state, same source: true while the main frame is fetching a
       // page. Drives the toolbar reload spinner. An asleep tab has no view, so it
       // is never loading. Refreshed by the did-start/did-stop-loading push.
@@ -3979,6 +3992,7 @@ export class ProfileManager {
       // draft would otherwise sit in memory until its TTL, long after the tab
       // that held it stopped existing.
       this.cards.forgetTab(`${pw.id}:${id}`)
+      this.audibleHold.forget(id)
       this.logins.forgetTab(`${pw.id}:${id}`)
       this.deps.extensions.removeTab(view.webContents)
       pw.window.contentView.removeChildView(view)
@@ -4702,7 +4716,7 @@ export class ProfileManager {
               id: tab.id,
               title: tab.title,
               url: tab.url,
-              audible: this.liveContents(pw, tab.id)?.isCurrentlyAudible() === true
+              audible: this.tabAudible(pw, tab.id)
             }
           : null,
       tabCount: pw.state.tabs.length,
@@ -5916,7 +5930,7 @@ export class ProfileManager {
     if (pw.window.isDestroyed()) return
     const chrome = pw.window.webContents
     const audible = pw.state.tabs.filter(
-      (t) => this.liveContents(pw, t.id)?.isCurrentlyAudible() === true
+      (t) => this.tabAudible(pw, t.id)
     )
     const items = buildAudioMenu(audible.map((t) => ({ id: t.id, title: t.title, url: t.url })))
     const template = items.map((item) => this.audioMenuItemToTemplate(item, chrome))
@@ -6422,7 +6436,7 @@ export class ProfileManager {
           url: tab.url,
           favicon: tab.favicon,
           lastAudibleAt: tab.lastAudibleAt,
-          audible: this.liveContents(pw, tab.id)?.isCurrentlyAudible() === true
+          audible: this.tabAudible(pw, tab.id)
         })
       }
     }
