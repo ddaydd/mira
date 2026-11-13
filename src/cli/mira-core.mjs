@@ -1182,3 +1182,76 @@ export function withClient(request, client) {
   if (typeof request.client === 'string' && request.client.trim() !== '') return request
   return { client, ...request }
 }
+
+/**
+ * The origin (scheme + host + port) a `mira open <url>` will load, or null when
+ * it is not a web page we can compare (file://, about:, a search query). Mirrors
+ * the address-bar rules of src/main/url.ts: localhost / 127.0.0.1 default to
+ * http, a bare domain to https. A null only means "no reuse": a new tab opens.
+ *
+ * @param {string|null|undefined} raw
+ * @returns {string|null}
+ */
+export function webOrigin(raw) {
+  const input = String(raw ?? '').trim()
+  if (input === '') return null
+  let href = null
+  if (/^https?:\/\//i.test(input)) href = input
+  else if (/^(localhost|127\.0\.0\.1)(:\d+)?(\/.*)?$/i.test(input)) href = `http://${input}`
+  else if (
+    !/\s/.test(input) &&
+    !/^[a-z][a-z0-9+.-]*:/i.test(input) &&
+    /^[^\s/]+\.[^\s]+$/.test(input)
+  )
+    href = `https://${input}`
+  if (href === null) return null
+  try {
+    const u = new URL(href)
+    return u.protocol === 'http:' || u.protocol === 'https:' ? u.origin : null
+  } catch {
+    return null
+  }
+}
+
+/** Above this many tabs in its session window, `mira open` reminds the agent to close some. */
+export const SESSION_TAB_WARN = 5
+
+/**
+ * Which tab of the agent's SESSION window `mira open <url>` should navigate
+ * instead of opening a new one: a tab already on the same origin. Test runs
+ * chain `open` page after page, and session windows reached 31 then 64 tabs
+ * (2026-11-13), mostly duplicates of one localhost. The active tab wins when it
+ * matches, else the most recently active match.
+ *
+ * Only for the session window: the caller decides that (no --tab/$MIRA_TAB,
+ * no --window, no --new-tab, no --lazy).
+ *
+ * @param {Array<{id:string,url?:string,lastActiveAt?:number}>} tabs
+ * @param {string|null|undefined} activeId
+ * @param {string} url  what was passed to `mira open`
+ * @returns {{id:string}|null}
+ */
+export function reusableSessionTab(tabs, activeId, url) {
+  const want = webOrigin(url)
+  if (!want) return null
+  const same = (tabs ?? []).filter((t) => t && t.id && webOrigin(t.url) === want)
+  if (same.length === 0) return null
+  const active = same.find((t) => t.id === activeId)
+  if (active) return { id: active.id }
+  const best = same.reduce((a, b) => ((b.lastActiveAt ?? 0) > (a.lastActiveAt ?? 0) ? b : a))
+  return { id: best.id }
+}
+
+/**
+ * The stderr reminder once a session window holds too many tabs, or null.
+ *
+ * @param {number} count  tabs in the session window after this open
+ * @returns {string|null}
+ */
+export function sessionTabWarning(count) {
+  if (!Number.isFinite(count) || count <= SESSION_TAB_WARN) return null
+  return (
+    `mira: ${count} onglets ouverts dans ta session : pense à fermer ceux qui ne servent plus ` +
+    `(mira tabs --session, puis mira call close-tab --params '{"id":"<id>"}')`
+  )
+}

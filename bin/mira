@@ -53,6 +53,9 @@
 //                                   (--full: the whole document, not just the viewport)
 //   mira nav <url> [--new-tab|-n]   navigate the pinned/active tab in place (--new-tab: open a fresh tab instead)
 //   mira open <url> [--background|-b]  open <url> in a NEW tab, leaving the current tab untouched
+//                                   In a Claude session's own window: a tab already on the SAME
+//                                   origin (scheme+host+port) is navigated instead (--new-tab: force
+//                                   a new one), and past 5 tabs a reminder to close some goes to stderr
 //                                   With SEVERAL profiles open and no --tab/$MIRA_TAB, both refuse
 //                                   to guess a window: pass --window <id> or --profile <id-prefix>.
 //                                   (--background: load it hidden — the window does not switch to it)
@@ -101,6 +104,8 @@ import {
   formatConsole,
   formatWindows,
   formatFocus,
+  reusableSessionTab,
+  sessionTabWarning,
   resolveCode,
   resolveTimeoutMs,
   background,
@@ -316,6 +321,7 @@ async function main() {
   // An agent session with no explicit target works in its OWN window (see the
   // header): ask Mira for it (created on first use) and aim at its active tab.
   const agentSession = sessionTarget({ command, positionals, flags, tabId, env: process.env })
+  let sessionWindowId = null
   if (agentSession) {
     const { profileFlag, ...params } = agentSession
     if (profileFlag) {
@@ -332,6 +338,7 @@ async function main() {
     )
     if (res.ok) {
       if (res.tabId) tabId = res.tabId
+      if (typeof res.windowId === 'string') sessionWindowId = res.windowId
     } else if (/Unknown command/.test(String(res.error ?? ''))) {
       process.stderr.write(
         'mira: the running Mira has no session windows (older build); using the focused window\n'
@@ -670,6 +677,40 @@ async function main() {
       // also what picks the window).
       const url = positionals[0]
       if (!url) return die('open needs a url', 2)
+      // In this Claude session's own window, a tab already on the same origin
+      // is navigated instead of opening another one: test runs chain `open`
+      // page after page, and session windows reached 64 tabs (2026-11-13).
+      // --new-tab forces a fresh tab; --lazy (bulk opens) never reuses. An
+      // explicit target (--tab, $MIRA_TAB, --window) has no session window.
+      if (sessionWindowId) {
+        const listed = await call(
+          { command: 'list-tabs', params: { windowId: sessionWindowId } },
+          socketPath,
+          timeoutMs
+        ).catch(() => null)
+        const tabs = listed?.ok ? (listed.tabs ?? []) : null
+        const reuse =
+          tabs && flags['new-tab'] !== true && flags.lazy !== true
+            ? reusableSessionTab(tabs, listed.activeId, url)
+            : null
+        const warning = tabs ? sessionTabWarning(tabs.length + (reuse ? 0 : 1)) : null
+        if (warning) process.stderr.write(warning + '\n')
+        if (reuse) {
+          // Show it (as a new tab would be), so exec/snap/shot then aim at it.
+          if (!background(flags) && reuse.id !== listed.activeId) {
+            const act = await call(
+              { command: 'activate-tab', params: { id: reuse.id } },
+              socketPath,
+              timeoutMs
+            ).catch((e) => die(e.message, 2))
+            if (!act.ok) return die(JSON.stringify(act), 1)
+          }
+          process.stderr.write(
+            `mira: same site already open in tab ${reuse.id}, navigating it (--new-tab for a fresh tab)\n`
+          )
+          return send(buildNav(url, reuse.id, {}), { json })
+        }
+      }
       return send(
         buildNav(url, await navTargetTab(), {
           newTab: true,

@@ -59,6 +59,7 @@ mira console --level error --limit 50  # the page's captured console: console.*,
 mira shot /tmp/page.png                # PNG capture of the pinned/active tab (--full = whole page)
 mira reload                            # reload the pinned or active tab (on the error page: retries the failed url)
 mira open example.com [-b]             # OPEN X → new tab, leaves the current tab alone (-b: hidden tab)
+                                       # in the session window: reuses a tab of the same origin (--new-tab: never)
 mira open example.com -b --lazy        # tab created ASLEEP, loaded when the user clicks it: for handing
                                        # the user many tabs at once (never a tab you then drive)
 mira nav example.com                   # "go to X" → loads in place, OVERWRITES the pinned/active tab (-n: new tab)
@@ -109,6 +110,14 @@ mira open https://example.com --profile perso   # session window in the "perso" 
 mira shot                                        # same window, nothing to repeat
 mira done                                        # close the session's windows
 ```
+
+**`mira open` does not pile up tabs in the session window** (Linux fork, 2026-11-13: session windows
+had reached 64 tabs of the same localhost). When the session window already holds a tab on the
+**same origin** (scheme + host + port) as the url, `open` navigates that tab (and shows it, unless
+`-b`) instead of creating one, and says so on stderr. `--new-tab` forces a fresh tab; `--lazy` never
+reuses. An explicit target (`--tab`, `$MIRA_TAB`, `--window`) is untouched. Past 5 tabs in the
+session window, `open` prints a reminder on stderr: close the ones you no longer need
+(`mira tabs --session`, then `mira call close-tab --params '{"id":"<id>"}'`).
 
 - **Several profiles open and no `--profile` on the first call: refused**, never guessed (same
   rule as below). A session that already has a window in two profiles must name one too.

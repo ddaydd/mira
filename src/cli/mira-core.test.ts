@@ -28,7 +28,11 @@ import {
   resolveNavTarget,
   clientName,
   withClient,
-  profileWindow
+  profileWindow,
+  webOrigin,
+  reusableSessionTab,
+  sessionTabWarning,
+  SESSION_TAB_WARN
   // @ts-expect-error — plain-ESM sibling module, no .d.ts (the CLI ships without a build)
 } from './mira-core.mjs'
 
@@ -773,5 +777,57 @@ describe('profileWindow', () => {
     expect(profileWindow(windows, 'perso')).toEqual({
       error: 'profile perso has 2 windows; pick one with --window:\n  w2\n  w3'
     })
+  })
+})
+
+describe('webOrigin', () => {
+  it('reads the origin of full and address-bar style urls', () => {
+    expect(webOrigin('http://localhost:3000/admin?x=1')).toBe('http://localhost:3000')
+    expect(webOrigin('localhost:3000/login')).toBe('http://localhost:3000')
+    expect(webOrigin('127.0.0.1:4000')).toBe('http://127.0.0.1:4000')
+    expect(webOrigin('example.com/path')).toBe('https://example.com')
+    expect(webOrigin('HTTPS://Example.com:443/')).toBe('https://example.com')
+  })
+  it('returns null for what is not a comparable web page', () => {
+    expect(webOrigin('about:blank')).toBeNull()
+    expect(webOrigin('file:///tmp/x.html')).toBeNull()
+    expect(webOrigin('data:text/html,hi')).toBeNull()
+    expect(webOrigin('some search words')).toBeNull()
+    expect(webOrigin('')).toBeNull()
+    expect(webOrigin(undefined)).toBeNull()
+  })
+})
+
+describe('reusableSessionTab', () => {
+  const tabs = [
+    { id: 'a', url: 'http://localhost:3000/', lastActiveAt: 10 },
+    { id: 'b', url: 'https://example.com/', lastActiveAt: 30 },
+    { id: 'c', url: 'http://localhost:3000/admin', lastActiveAt: 20 },
+    { id: 'd', url: 'about:blank', lastActiveAt: 40 }
+  ]
+  it('picks the active tab when it is on the same origin', () => {
+    expect(reusableSessionTab(tabs, 'a', 'localhost:3000/x')).toEqual({ id: 'a' })
+  })
+  it('else the most recently active tab of that origin', () => {
+    expect(reusableSessionTab(tabs, 'b', 'http://localhost:3000/y')).toEqual({ id: 'c' })
+  })
+  it('does not match another port, scheme or host', () => {
+    expect(reusableSessionTab(tabs, 'a', 'http://localhost:3001/')).toBeNull()
+    expect(reusableSessionTab(tabs, 'a', 'https://localhost:3000/')).toBeNull()
+    expect(reusableSessionTab(tabs, 'a', 'https://www.example.com/')).toBeNull()
+  })
+  it('never reuses for a non-web url', () => {
+    expect(reusableSessionTab(tabs, 'd', 'about:blank')).toBeNull()
+  })
+})
+
+describe('sessionTabWarning', () => {
+  it('stays quiet up to the threshold', () => {
+    expect(sessionTabWarning(SESSION_TAB_WARN)).toBeNull()
+  })
+  it('names the count above it', () => {
+    expect(sessionTabWarning(SESSION_TAB_WARN + 1)).toMatch(
+      /^mira: 6 onglets ouverts dans ta session/
+    )
   })
 })
