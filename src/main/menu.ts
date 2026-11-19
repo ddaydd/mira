@@ -364,11 +364,6 @@ export function appMenuTemplate(handlers: AppMenuHandlers): MenuItemConstructorO
   if (!isMac && Array.isArray(fileMenu.submenu)) {
     fileMenu.submenu.push(
       { type: 'separator' },
-      {
-        label: 'History',
-        accelerator: 'CmdOrCtrl+H',
-        click: () => handlers.openSettings('history')
-      },
       // Chrome's Ctrl+J is taken by the AI panel here (toggleSkillPane).
       {
         label: 'Downloads',
@@ -445,7 +440,27 @@ export function appMenuTemplate(handlers: AppMenuHandlers): MenuItemConstructorO
           label: 'Hard Reload',
           accelerator: 'CmdOrCtrl+Shift+R',
           click: () => handlers.hardReload()
-        }
+        },
+        // Linux fork: the history page and the closed-tab reopen live here, as in
+        // Chrome's History menu. The File menu's Reopen Closed Tab keeps the real
+        // Ctrl+Shift+T binding; this twin only shows it (registerAccelerator off,
+        // so the key never fires twice).
+        ...(isMac
+          ? []
+          : ([
+              { type: 'separator' },
+              {
+                label: 'Show All History',
+                accelerator: 'CmdOrCtrl+H',
+                click: () => handlers.openSettings('history')
+              },
+              {
+                label: 'Reopen Closed Tab',
+                accelerator: 'CmdOrCtrl+Shift+T',
+                registerAccelerator: false,
+                click: () => handlers.reopenTab()
+              }
+            ] as MenuItemConstructorOptions[]))
       ]
     },
     {

@@ -144,3 +144,32 @@ describe.skipIf(process.platform === 'darwin')('the Downloads item (off macOS)',
     expect(handlers.openSettings).toHaveBeenCalledWith('downloads')
   })
 })
+
+describe.skipIf(process.platform === 'darwin')('the History menu (off macOS)', () => {
+  const click = (item: MenuItemConstructorOptions | undefined): void =>
+    item?.click?.(
+      {} as Parameters<NonNullable<MenuItemConstructorOptions['click']>>[0],
+      undefined,
+      {} as KeyboardEvent
+    )
+  const historyMenu = (handlers: AppMenuHandlers): MenuItemConstructorOptions[] =>
+    (appMenuTemplate(handlers).find((m) => m.label === 'History')
+      ?.submenu as MenuItemConstructorOptions[]) ?? []
+
+  it('opens Settings → History on Ctrl+H', () => {
+    const handlers = makeHandlers()
+    const item = historyMenu(handlers).find((i) => i.label === 'Show All History')
+    expect(item?.accelerator).toBe('CmdOrCtrl+H')
+    click(item)
+    expect(handlers.openSettings).toHaveBeenCalledWith('history')
+  })
+
+  it('reopens the last closed tab, without binding Ctrl+Shift+T a second time', () => {
+    const handlers = makeHandlers()
+    const item = historyMenu(handlers).find((i) => i.label === 'Reopen Closed Tab')
+    expect(item?.accelerator).toBe('CmdOrCtrl+Shift+T')
+    expect(item?.registerAccelerator).toBe(false)
+    click(item)
+    expect(handlers.reopenTab).toHaveBeenCalledTimes(1)
+  })
+})
