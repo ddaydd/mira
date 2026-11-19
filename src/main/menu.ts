@@ -364,6 +364,11 @@ export function appMenuTemplate(handlers: AppMenuHandlers): MenuItemConstructorO
   if (!isMac && Array.isArray(fileMenu.submenu)) {
     fileMenu.submenu.push(
       { type: 'separator' },
+      {
+        label: 'History',
+        accelerator: 'CmdOrCtrl+H',
+        click: () => handlers.openSettings('history')
+      },
       // Chrome's Ctrl+J is taken by the AI panel here (toggleSkillPane).
       {
         label: 'Downloads',

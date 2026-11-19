@@ -16,7 +16,8 @@ import {
   recordVisit as recordVisitPure,
   recentHistory,
   searchHistory as searchHistoryPure,
-  removeHistoryForDomain as removeHistoryForDomainPure
+  removeHistoryForDomain as removeHistoryForDomainPure,
+  removeHistoryUrl
 } from './history-store'
 import {
   type PermissionGrant,
@@ -87,6 +88,19 @@ export class ProfileData {
     }
     this.deps.persistHistory(this.history)
     return { cleared }
+  }
+
+  /** Drop the entry for exactly `url` and write NOW (same durability as clear). */
+  removeHistoryEntry(url: string): { removed: boolean } {
+    const { list, removed } = removeHistoryUrl(this.history, url)
+    if (!removed) return { removed }
+    this.history = list
+    if (this.historyTimer) {
+      clearTimeout(this.historyTimer)
+      this.historyTimer = null
+    }
+    this.deps.persistHistory(this.history)
+    return { removed }
   }
 
   /** Drop every history entry belonging to the registrable domain `base` (the

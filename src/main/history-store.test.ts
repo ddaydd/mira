@@ -3,6 +3,7 @@ import {
   recordVisit,
   recentHistory,
   removeHistoryForDomain,
+  removeHistoryUrl,
   searchHistory,
   normalizeHistory,
   MAX_HISTORY,
@@ -152,5 +153,21 @@ describe('removeHistoryForDomain', () => {
     const { list: kept, removed } = removeHistoryForDomain(bad, 'example.com')
     expect(removed).toBe(0)
     expect(kept).toEqual(bad)
+  })
+})
+
+describe('removeHistoryUrl', () => {
+  const list = [
+    { url: 'https://a.test/x', title: 'A', lastVisited: 2, visitCount: 1 },
+    { url: 'https://a.test/y', title: 'A2', lastVisited: 1, visitCount: 3 }
+  ]
+  it('drops only the exact url', () => {
+    const { list: kept, removed } = removeHistoryUrl(list, 'https://a.test/x')
+    expect(removed).toBe(true)
+    expect(kept.map((e) => e.url)).toEqual(['https://a.test/y'])
+    expect(list).toHaveLength(2)
+  })
+  it('reports nothing removed for an unknown url', () => {
+    expect(removeHistoryUrl(list, 'https://a.test').removed).toBe(false)
   })
 })

@@ -7092,6 +7092,9 @@ export class ProfileManager {
       openSettings: (section?: string) => {
         if (!target || target.window.isDestroyed()) throw new Error('no target window')
         this.openSettingsTabIn(target, section)
+        // Settings is drawn by the chrome: a user opening it (Ctrl+H, Ctrl+,) must
+        // type into it, not into the hidden page that still holds the keyboard.
+        if (origin === 'ui' && target.window.isFocused()) target.window.webContents.focus()
       },
       // sidebarWidth answers for the target window's profile (per-profile widths).
       getSettings: () => ({
@@ -8073,6 +8076,7 @@ export class ProfileManager {
       listHistory: (limit) => profileData().listHistory(limit),
       searchHistory: (query, limit) => profileData().searchHistory(query, limit),
       clearHistory: () => profileData().clearHistory(),
+      deleteHistoryEntry: (url) => profileData().removeHistoryEntry(url),
       listPermissions: () => profileData().listPermissions(),
       clearPermissions: () => profileData().clearPermissions(),
       openLocationSettings: () => this.openLocationSettings(),

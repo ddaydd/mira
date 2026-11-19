@@ -616,7 +616,7 @@ app.whenReady().then(async () => {
       // Route through the registry so it opens a Settings tab in the focused
       // window, like the toolbar / socket / Cmd+, path.
       openSettings: (section) =>
-        runDetached('open-settings', section ? { section } : {}, profiles.contextForFocused()),
+        runDetached('open-settings', section ? { section } : {}, profiles.contextForMenu()),
       // Same check as the daily one, through the registry like every other menu
       // item. Menu context (origin 'ui'): the user clicked and is waiting, so the
       // result comes back in a dialog on their window, not a notification

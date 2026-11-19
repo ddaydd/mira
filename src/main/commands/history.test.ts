@@ -80,3 +80,24 @@ describe('clear-history', () => {
     expect(listHistory(ctx)).toEqual([])
   })
 })
+
+describe('delete-history-entry', () => {
+  it('removes exactly that page', () => {
+    const { ctx } = makeContext()
+    visit(ctx, 'https://alpha.test')
+    visit(ctx, 'https://beta.test')
+    const [beta, alpha] = listHistory(ctx).map((e) => e.url)
+    const res = registry.execute('delete-history-entry', { url: alpha }, ctx)
+    expect(res).toMatchObject({ ok: true, removed: true })
+    expect(listHistory(ctx).map((e) => e.url)).toEqual([beta])
+    expect(registry.execute('delete-history-entry', { url: alpha }, ctx)).toMatchObject({
+      ok: true,
+      removed: false
+    })
+  })
+
+  it('rejects a missing url', () => {
+    const { ctx } = makeContext()
+    expect(registry.execute('delete-history-entry', {}, ctx).ok).toBe(false)
+  })
+})

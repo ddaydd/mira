@@ -19,6 +19,8 @@ export interface HistoryContext {
   searchHistory: (query: string, limit: number) => HistoryEntry[]
   /** Wipe the whole history. Returns how many entries were removed. */
   clearHistory: () => { cleared: number }
+  /** Remove the entry for exactly `url` (Settings → History). */
+  deleteHistoryEntry: (url: string) => { removed: boolean }
 }
 
 /** Default page size for list-history / search-history when the caller omits one.
@@ -59,6 +61,18 @@ export const historyCommands: CommandMap<CommandContext> = {
     try {
       const entries = ctx.searchHistory(query, clampLimit(limit))
       return { ok: true, entries }
+    } catch (error) {
+      return fail(error)
+    }
+  },
+
+  'delete-history-entry': (ctx, params) => {
+    const { url } = (params ?? {}) as { url?: unknown }
+    if (typeof url !== 'string' || url === '') {
+      return { ok: false, error: '"url" must be a non-empty string' }
+    }
+    try {
+      return { ok: true, ...ctx.deleteHistoryEntry(url) }
     } catch (error) {
       return fail(error)
     }

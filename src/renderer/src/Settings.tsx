@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { AudioHistorySection } from './features/audio-history/AudioHistorySection'
 import { ChatHistorySection } from './features/chat-history/ChatHistorySection'
 import { DownloadsSection } from './features/downloads/DownloadsSection'
+import { HistorySection } from './features/history/HistorySection'
 import { BookmarksSection } from './features/bookmarks-manager/BookmarksSection'
 
 // The Settings surface, rendered inline as a Mira tab (App shows it when the
@@ -47,6 +48,7 @@ type Section =
   | 'bookmarks'
   | 'tabs'
   | 'audio'
+  | 'history'
   | 'downloads'
   | 'extensions'
   | 'permissions'
@@ -1366,6 +1368,7 @@ const SECTIONS: Array<{ key: Section; label: string }> = [
   { key: 'bookmarks', label: 'Bookmarks' },
   { key: 'tabs', label: 'Tabs' },
   { key: 'audio', label: 'Audio' },
+  { key: 'history', label: 'History' },
   { key: 'downloads', label: 'Downloads' },
   { key: 'extensions', label: 'Extensions' },
   { key: 'permissions', label: 'Permissions' },
@@ -1408,6 +1411,7 @@ function Settings({ section: requested }: { section?: string }): React.JSX.Eleme
       {section === 'bookmarks' && <BookmarksSection />}
       {section === 'tabs' && <TabsMemorySection />}
       {section === 'audio' && <AudioHistorySection />}
+      {section === 'history' && <HistorySection />}
       {section === 'downloads' && <DownloadsSection />}
       {section === 'extensions' && <ExtensionsSection />}
       {section === 'permissions' && <PermissionsSection />}

@@ -82,6 +82,16 @@ export function removeHistoryForDomain(
   return { list: kept, removed: list.length - kept.length }
 }
 
+/** Drop the entry for exactly `url` (Settings → History, one row's ×). Pure:
+ * returns a new list plus whether an entry was removed. */
+export function removeHistoryUrl(
+  list: HistoryEntry[],
+  url: string
+): { list: HistoryEntry[]; removed: boolean } {
+  const kept = list.filter((e) => e.url !== url)
+  return { list: kept, removed: kept.length !== list.length }
+}
+
 /** Relevance of an entry against a lower-cased query: a title/url prefix beats a
  * substring, matching either the title or the url. 0 = no match. */
 function scoreEntry(entry: HistoryEntry, q: string): number {

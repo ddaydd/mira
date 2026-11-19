@@ -1793,6 +1793,11 @@ export function makeContext(
       state.history = []
       return { cleared }
     },
+    deleteHistoryEntry: (url: string) => {
+      const before = state.history.length
+      state.history = state.history.filter((e) => e.url !== url)
+      return { removed: state.history.length !== before }
+    },
     listPermissions: () => state.permissions.slice(),
     clearPermissions: () => {
       const cleared = state.permissions.length

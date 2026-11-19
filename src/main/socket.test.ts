@@ -340,6 +340,7 @@ function setup(): {
     listHistory: () => [],
     searchHistory: () => [],
     clearHistory: () => ({ cleared: 0 }),
+    deleteHistoryEntry: () => ({ removed: false }),
     showTooltip: () => ({ shown: true }),
     hideTooltip: () => ({ hidden: true }),
     showToast: () => {},

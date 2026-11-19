@@ -1,0 +1,17 @@
+/* Settings → History (features/history): rows reuse the bookmark manager's
+ * bm-* classes; this only adds the day headings and the time column. */
+.hist-day + .hist-day {
+  margin-top: 14px;
+}
+
+.hist-day-label {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ev-c-gray-1);
+}
+
+.bm-date.hist-time {
+  min-width: 40px;
+  text-align: left;
+}

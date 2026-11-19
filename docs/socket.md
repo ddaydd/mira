@@ -403,6 +403,7 @@ Every pane conversation is saved per profile (`profiles/<id>/chat-history.json`,
 | ---------------- | ----------------- | ------------------ |
 | `list-history`   | `limit?`          | most recent visits |
 | `search-history` | `query`, `limit?` | fuzzy search       |
+| `delete-history-entry` | `url`     | remove that one page → `{removed}` (Settings → History, Ctrl+H) |
 | `clear-history`  | —                 | wipe it            |
 
 ### Profiles & windows

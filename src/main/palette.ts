@@ -162,6 +162,13 @@ const STATIC_COMMANDS: ReadonlyArray<Omit<PaletteEntry, 'group'>> = [
     shortcut: '⌘,'
   },
   {
+    id: 'cmd:history',
+    title: 'History',
+    command: 'open-settings',
+    params: { section: 'history' },
+    keywords: 'visited pages browsing'
+  },
+  {
     id: 'cmd:downloads',
     title: 'Downloads',
     command: 'open-settings',

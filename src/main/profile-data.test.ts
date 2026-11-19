@@ -75,6 +75,20 @@ describe('ProfileData history', () => {
     vi.advanceTimersByTime(DEBOUNCE)
     expect(persistHistory).toHaveBeenCalledTimes(1)
   })
+
+  it('removeHistoryEntry drops one url and persists immediately', () => {
+    const { data, persistHistory } = make()
+    data.recordVisit('https://a.com', 'A')
+    data.recordVisit('https://b.com', 'B')
+    expect(data.removeHistoryEntry('https://a.com')).toEqual({ removed: true })
+    expect(data.listHistory(100).map((e) => e.url)).toEqual(['https://b.com'])
+    expect(persistHistory).toHaveBeenCalledTimes(1)
+    vi.advanceTimersByTime(DEBOUNCE)
+    expect(persistHistory).toHaveBeenCalledTimes(1)
+    // Unknown url: nothing removed, nothing written.
+    expect(data.removeHistoryEntry('https://zzz.com')).toEqual({ removed: false })
+    expect(persistHistory).toHaveBeenCalledTimes(1)
+  })
 })
 
 describe('ProfileData permissions', () => {
