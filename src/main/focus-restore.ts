@@ -42,3 +42,28 @@ export function shouldFocusPageOnTabSelect(input: {
 }): boolean {
   return input.userDriven && input.windowFocused && input.hasActivePage && !input.overlayOpen
 }
+
+/** Where should the keyboard go when a tab's page takes focus?
+ *
+ * A page that is neither the active tab nor an input underlay is hidden, yet
+ * Chromium still hands it the keyboard when it commits a navigation — a
+ * background tab that reloads itself every 20 s (a "waiting for the live"
+ * page) stole the keystrokes of the tab the user was typing in, every 20 s.
+ *
+ * - `keep`: the page is visible, the focus is legitimate.
+ * - `ignore`: hidden page, but the window is not focused — moving the keyboard
+ *   there would be foreground theft; the window-focus restore puts it back.
+ * - `page` / `chrome`: hidden page in a focused window — give the keyboard back
+ *   to what held it before (the active page if it was the target and exists,
+ *   the chrome otherwise). */
+export function hiddenPageFocusAction(input: {
+  isActive: boolean
+  underlaid: boolean
+  windowFocused: boolean
+  target: FocusTarget
+  hasActivePage: boolean
+}): 'keep' | 'ignore' | 'page' | 'chrome' {
+  if (input.isActive || input.underlaid) return 'keep'
+  if (!input.windowFocused) return 'ignore'
+  return input.target === 'page' && input.hasActivePage ? 'page' : 'chrome'
+}

@@ -13,6 +13,7 @@
 import { randomUUID } from 'crypto'
 import type { FocusFeed, TabFocus } from './focus-feed'
 import {
+  hiddenPageFocusAction,
   shouldFocusPageOnTabSelect,
   shouldRestorePageFocus,
   type FocusTarget
@@ -3114,7 +3115,48 @@ export class ProfileManager {
     const owner = (): ProfileWindow => this.ownerOf(tabId) ?? initialPw
     // Remember that the keyboard is on the PAGE, so a later app switch back to
     // Mira gives it to the page again instead of the chrome (focus-restore.ts).
-    wc.on('focus', () => (owner().focusTarget = 'page'))
+    // A HIDDEN tab (background, not an underlay) that reloads grabs the keyboard
+    // when its new page commits: bounce it back to what held it, and do not record
+    // it as the window's focus target (hiddenPageFocusAction).
+    // Decided at event time, applied a tick later: a focus() made inside the
+    // 'focus' event is overridden by Chromium's own focus change (measured under
+    // Xvfb). Re-checked when the load ends, since under Linux a page can take the
+    // keyboard again once loaded without a second 'focus' event (see addTabIn).
+    const focusAction = (): ReturnType<typeof hiddenPageFocusAction> | null => {
+      const pw = this.ownerOf(tabId)
+      if (!pw || pw.window.isDestroyed()) return null
+      const activeId = pw.state.activeId
+      return hiddenPageFocusAction({
+        isActive: activeId === tabId,
+        underlaid: pw.inputUnderlay.has(tabId),
+        windowFocused: pw.window.isFocused(),
+        target: pw.focusTarget,
+        hasActivePage: !!activeId && activeId !== tabId && !!this.liveContents(pw, activeId)
+      })
+    }
+    const bounceHiddenFocus = (): void => {
+      const action = focusAction()
+      const pw = this.ownerOf(tabId)
+      if (!pw || (action !== 'page' && action !== 'chrome')) return
+      const activeId = pw.state.activeId
+      const activePage = activeId ? this.liveContents(pw, activeId) : null
+      if (action === 'page' && activePage) activePage.focus()
+      else pw.window.webContents.focus()
+    }
+    wc.on('focus', () => {
+      const action = focusAction()
+      if (action === 'keep') {
+        const pw = this.ownerOf(tabId)
+        if (pw) pw.focusTarget = 'page'
+      } else if (action === 'page' || action === 'chrome') {
+        setTimeout(bounceHiddenFocus, 0)
+      }
+    })
+    wc.on('did-stop-loading', () => {
+      setTimeout(() => {
+        if (!wc.isDestroyed() && wc.isFocused()) bounceHiddenFocus()
+      }, 0)
+    })
     const patch = (p: Partial<Omit<TabMeta, 'id'>>): void => {
       const pw = owner()
       // Page events are exactly what `updatedAt` measures, so they carry a clock.

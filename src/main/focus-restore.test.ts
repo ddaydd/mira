@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { shouldFocusPageOnTabSelect, shouldRestorePageFocus } from './focus-restore'
+import {
+  hiddenPageFocusAction,
+  shouldFocusPageOnTabSelect,
+  shouldRestorePageFocus
+} from './focus-restore'
 
 describe('shouldRestorePageFocus', () => {
   it('restores the page when the page held focus', () => {
@@ -36,5 +40,33 @@ describe('shouldFocusPageOnTabSelect', () => {
 
   it('leaves the keyboard to the chrome while an overlay is open', () => {
     expect(shouldFocusPageOnTabSelect({ ...base, overlayOpen: true })).toBe(false)
+  })
+})
+
+describe('hiddenPageFocusAction', () => {
+  const base = {
+    isActive: false,
+    underlaid: false,
+    windowFocused: true,
+    target: 'page' as const,
+    hasActivePage: true
+  }
+  it('keeps the focus on the active tab', () => {
+    expect(hiddenPageFocusAction({ ...base, isActive: true })).toBe('keep')
+  })
+  it('keeps the focus on an input underlay (visible under the active tab)', () => {
+    expect(hiddenPageFocusAction({ ...base, underlaid: true })).toBe('keep')
+  })
+  it('gives a hidden reloading tab focus back to the active page', () => {
+    expect(hiddenPageFocusAction(base)).toBe('page')
+  })
+  it('gives it back to the chrome when the chrome held the keyboard', () => {
+    expect(hiddenPageFocusAction({ ...base, target: 'chrome' })).toBe('chrome')
+  })
+  it('falls back to the chrome when the active tab has no page (Settings)', () => {
+    expect(hiddenPageFocusAction({ ...base, hasActivePage: false })).toBe('chrome')
+  })
+  it('does nothing in a background window (no foreground theft)', () => {
+    expect(hiddenPageFocusAction({ ...base, windowFocused: false })).toBe('ignore')
   })
 })
